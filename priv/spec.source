@@ -1,0 +1,20 @@
+{
+  "commit": "f6134106fb233972a658c7e9e6eda356a43e9f9b",
+  "files": {
+    "spec/constants.json": "16501d3d455ab90d476957b1923d112814c6280279f58311d5e389a4d105ee9a",
+    "spec/constructions/c0d70826d7501d5089184d1947bad3dcc33c3172269d425f16fc0025ed07df49.json": "c0d70826d7501d5089184d1947bad3dcc33c3172269d425f16fc0025ed07df49",
+    "spec/encodings.json": "f97ddf7c9e146b6ea4dee685dcf28e8087e925998de168c8159ef06c4f6fe2c4",
+    "spec/exit-codes.json": "1ddfb2bf03ce7d4978b9c585f73682a2a4edd9d0d38a35eff2827cdedc0b1f97",
+    "spec/keyring.production.json": "4087b26b2507c609068dbe6b628b18246c1ce80f289f7ea72ee9d3565a13ff6e",
+    "spec/keys.nonproduction.json": "d579606b1895011593b17659d0afae379f2df0c5f732e9f47fc0c523e60a344e",
+    "spec/network-pins.json": "89cc9ec6777a66d13f6f7cb68277ee29ea8fa0b4590a85e659c31d133d06ea31",
+    "spec/networks.json": "b622c188f7d3f02ab0e6ea7a426cdb829b4556ef0048856146f4d2eb83d081ee",
+    "spec/prefixes.json": "c519590a1009061a0301f1d71723dbedae6f2fac477284f73df6083c4fd9be5b",
+    "spec/reason-codes.json": "14f93d55108adbe2607554e73545589944f0ad32a0ad49692e9110894ecd0d2f",
+    "spec/schema.json": "94ddfbf20a04d8a2ca5d23a32bf72112d016407e0ce9fcd8252acebb51902a55",
+    "spec/small-order-keys.json": "ffce98a8251ba283a9a5fb1f9e50fd4ae416a740db6a596652068e814c4a8dcc",
+    "spec/value-classes.json": "13ad22e3e027b63acf5c3b3f371bfb352eda147e37a091b725d77f575b388de0"
+  },
+  "manifest_sha256": "a7afd6307f5c3374e4fbd14dfe84a829ce6e34bd0910c22687c1d29f4918fc91",
+  "repository": "https://github.com/truestamp/truestamp-verification"
+}

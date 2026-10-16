@@ -1,0 +1,12 @@
+# Build output.
+/_build/
+/deps/
+/cover/
+/doc/
+/.elixir_ls/
+erl_crash.dump
+*.ez
+/truestamp_verify-*.tar
+
+# Scratch files.
+/tmp/
