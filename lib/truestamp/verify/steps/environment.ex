@@ -21,8 +21,6 @@ defmodule Truestamp.Verify.Steps.Environment do
 
   @doc "Step 4, ENVIRONMENT."
   @spec environment(Run.t()) :: Run.t()
-  def environment(%Run{ended: true} = run), do: run
-
   def environment(%Run{config: %{environment: e_v}, proof: proof} = run) do
     marker = Map.fetch(proof, "environment")
     values = %{"environment" => e_v}

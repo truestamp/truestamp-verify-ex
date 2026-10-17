@@ -28,8 +28,8 @@ defmodule Truestamp.Verify.Check do
   verify also names that step. An `info` row holds `construction`.
   """
 
-  alias Truestamp.Verify.{Messages, ReasonCodes, Row, TraceRow}
   alias Truestamp.Verify.JSON.Pointer
+  alias Truestamp.Verify.{Messages, ReasonCodes, Row, TraceRow}
 
   @typedoc "A check's outcome."
   @type outcome :: :pass | {:fail, ReasonCodes.code()} | {:info, ReasonCodes.code()}

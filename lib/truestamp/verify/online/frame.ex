@@ -68,35 +68,35 @@ defmodule Truestamp.Verify.Online.Frame do
   defp identities(reader, frame, deadline) do
     frame
     |> Enum.sort()
-    |> Enum.reduce_while({:ok, frame}, fn {{chain, network} = key, entry}, {:ok, frame} ->
-      module = Chains.commitment_chain(chain)
-      {production, kind} = module.identity()
-
-      judged =
-        Enum.map(entry.sources, fn source ->
-          {source,
-           judge(
-             module,
-             identity(reader, source.id, network, kind, deadline),
-             network == production
-           )}
-        end)
-
-      if Enum.any?(judged, &match?({_source, :forbidden}, &1)) do
-        {:halt, {:configuration_error, :identity_forbidden, %{chain: chain, network: network}}}
-      else
-        sources =
-          for {source, verdict} <- judged do
-            case verdict do
-              :ok -> source
-              {:unreachable, reason} -> %{source | identity: {:unreachable, reason}}
-            end
-          end
-
-        {:cont, {:ok, Map.put(frame, key, %{entry | sources: sources})}}
+    |> Enum.reduce_while({:ok, frame}, fn {key, entry}, {:ok, frame} ->
+      case confirm(reader, key, entry, deadline) do
+        {:ok, entry} -> {:cont, {:ok, Map.put(frame, key, entry)}}
+        error -> {:halt, error}
       end
     end)
   end
+
+  # The network's entry with each source's identity confirmed, or configuration_error when
+  # any source gives a value step 0 forbids for that network.
+  defp confirm(reader, {chain, network}, entry, deadline) do
+    module = Chains.commitment_chain(chain)
+    {production, kind} = module.identity()
+
+    judged =
+      for source <- entry.sources do
+        answer = identity(reader, source.id, network, kind, deadline)
+        {source, judge(module, answer, network == production)}
+      end
+
+    if Enum.any?(judged, &match?({_source, :forbidden}, &1)),
+      do: {:configuration_error, :identity_forbidden, %{chain: chain, network: network}},
+      else: {:ok, %{entry | sources: Enum.map(judged, &confirmed/1)}}
+  end
+
+  defp confirmed({source, :ok}), do: source
+
+  defp confirmed({source, {:unreachable, reason}}),
+    do: %{source | identity: {:unreachable, reason}}
 
   defp identity({module, state}, source, network, kind, deadline),
     do: Reads.read({module, state}, source, network, kind, %{}, deadline)

@@ -41,8 +41,6 @@ defmodule Truestamp.Verify.Steps.Window do
 
   @doc "Step 12, WINDOW."
   @spec window(Run.t()) :: Run.t()
-  def window(%Run{ended: true} = run), do: run
-
   def window(%Run{} = run) do
     before_edge = earliest(for {:before, edge} <- run.candidates, do: edge)
     after_edge = latest(for {:after, edge} <- run.candidates, do: edge)

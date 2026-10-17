@@ -235,9 +235,8 @@ defmodule Truestamp.Verify.JSON.Binary64 do
     float
   end
 
-  defp bit_length(0), do: 0
-
-  defp bit_length(n) do
+  # Only ever of a positive integer: M has a significant digit, and the quotient 56 bits.
+  defp bit_length(n) when n > 0 do
     <<first, _rest::binary>> = bytes = :binary.encode_unsigned(n)
     (byte_size(bytes) - 1) * 8 + length(Integer.digits(first, 2))
   end

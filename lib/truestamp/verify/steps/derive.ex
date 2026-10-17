@@ -37,8 +37,6 @@ defmodule Truestamp.Verify.Steps.Derive do
 
   @doc "Step 9, DERIVE: every recomputation and every link, with the run's trace."
   @spec derive(Run.t()) :: Run.t()
-  def derive(%Run{ended: true} = run), do: run
-
   def derive(%Run{proof: proof, public_key: public_key, attribution: attribution} = run) do
     {rows, trace} = proof |> checks(public_key, attribution) |> engine(run.config.messages)
     run = %{Run.add_rows(run, rows) | trace: trace}

@@ -9,7 +9,7 @@ defmodule Truestamp.Verify.KeyringLoadTest do
   # (no [L]A check, D58 item 16, and no decoding of the point).
   use ExUnit.Case, async: true
 
-  alias Truestamp.Verify.{Base64URL, Ed25519, KeyId, Keyring, JSON}
+  alias Truestamp.Verify.{Base64URL, Ed25519, JSON, KeyId, Keyring}
   alias Truestamp.Verify.Test.{Cases, StrictJSON}
 
   @root Truestamp.Verify.Test.Verification.root()

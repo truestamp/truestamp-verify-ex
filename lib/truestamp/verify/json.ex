@@ -82,13 +82,19 @@ defmodule Truestamp.Verify.JSON do
   @spec read_file(Path.t()) ::
           {:ok, binary()} | {:error, :input_too_large} | {:error, {:unreadable, term()}}
   def read_file(path) do
-    case File.open(path, [:read, :binary], &IO.binread(&1, @max_read_octets + 1)) do
-      {:ok, :eof} -> {:ok, ""}
-      {:ok, {:error, reason}} -> {:error, {:unreadable, reason}}
-      {:ok, bytes} -> with :ok <- read(bytes), do: {:ok, bytes}
+    with {:ok, result} <- File.open(path, [:read, :binary], &IO.binread(&1, @max_read_octets + 1)),
+         {:ok, bytes} <- bytes(result),
+         :ok <- read(bytes) do
+      {:ok, bytes}
+    else
+      {:error, :input_too_large} -> {:error, :input_too_large}
       {:error, reason} -> {:error, {:unreadable, reason}}
     end
   end
+
+  # IO.binread/2 gives the bytes, :eof for an empty file, or {:error, reason}.
+  defp bytes(:eof), do: {:ok, ""}
+  defp bytes(result), do: if(is_binary(result), do: {:ok, result}, else: result)
 
   @doc "Steps READ and PARSE in order: J1, then J2 to J6."
   @spec decode(binary()) ::

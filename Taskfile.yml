@@ -1,0 +1,159 @@
+# Copyright (c) 2026 Truestamp, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+# https://taskfile.dev
+#
+# Tool versions come from .tool-versions, which mise reads: Erlang, Elixir and this
+# runner. `task bootstrap` installs them.
+
+version: "3"
+
+tasks:
+  default:
+    desc: List all available tasks
+    cmds:
+      - task --list-all
+
+  # ===========================================================================
+  # Setup
+  # ===========================================================================
+
+  bootstrap:
+    desc: First-time setup. Installs the tools in .tool-versions with mise, then runs setup.
+    cmds:
+      - task: mise-install
+      - task: setup
+
+  mise-install:
+    desc: Install the tool versions in .tool-versions (Erlang, Elixir, task), prebuilt only
+    env:
+      # Fail rather than compile Erlang from source when no prebuilt build exists.
+      MISE_ERLANG_COMPILE: "false"
+    cmds:
+      - mise install
+      - mise ls --current
+
+  setup:
+    desc: "Fetch the dependencies, truestamp-verification's vectors among them (test only)"
+    aliases: [deps]
+    cmds:
+      - mix local.hex --force --if-missing
+      - mix local.rebar --force --if-missing
+      - mix deps.get
+
+  # ===========================================================================
+  # Everyday
+  # ===========================================================================
+
+  compile:
+    desc: Compile, with warnings as errors (in :test, so test/support is covered)
+    env:
+      MIX_ENV: test
+    cmds:
+      - mix compile --warnings-as-errors
+
+  format:
+    desc: Format the Elixir sources
+    cmds:
+      - mix format
+
+  format-check:
+    desc: Fail if any Elixir source is not formatted, without changing it
+    cmds:
+      - mix format --check-formatted
+
+  credo:
+    desc: Run credo in strict mode
+    cmds:
+      - mix credo --strict
+
+  dialyzer:
+    desc: Run dialyzer (its PLTs live under _build/plts)
+    env:
+      MIX_ENV: test
+    cmds:
+      - mix dialyzer
+
+  test:
+    desc: Run the tests, with coverage, which fails under 100%
+    cmds:
+      - mix test --cover --warnings-as-errors {{.CLI_ARGS}}
+
+  test-live:
+    desc: "Run the tests of the HTTP sources against the real services (network; slow)"
+    cmds:
+      - mix test --only live {{.CLI_ARGS}}
+
+  docs:
+    desc: Build the docs, failing on any warning
+    cmds:
+      - mix docs --warnings-as-errors
+
+  hex-build:
+    desc: Build the Hex package locally, to check what it ships
+    cmds:
+      - mix hex.build
+
+  spec-sync:
+    desc: Mirror spec/ of the truestamp-verification checkout into priv/spec/
+    cmds:
+      - elixir scripts/sync_spec.exs
+
+  spec-check:
+    desc: Fail unless priv/spec/ mirrors the truestamp-verification checkout
+    cmds:
+      - elixir scripts/sync_spec.exs --check
+
+  style:
+    desc: "Fail on a house-style slip: an em dash, a retired term, a versioned format name, or a BCP 14 key word"
+    silent: true
+    cmds:
+      - |
+        rc=0
+        if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+          echo "style: not inside a git working tree, so no file was checked"; exit 1
+        fi
+        # priv/spec/ mirrors truestamp-verification's spec/ byte for byte, so its style is
+        # that repository's.
+        files() { git ls-files -z --cached --others --exclude-standard -- "$@" ':!:priv/spec/**'; }
+        report() {
+          if [ -n "$1" ]; then echo "$1"; echo "style: $2"; rc=1; fi
+        }
+        report "$(files . | xargs -0 grep -s -H -n -I -F "$(printf '\342\200\224')" -- || true)" \
+          "an em dash; use a hyphen or rewrite the sentence"
+        report "$(files . | xargs -0 grep -s -H -n -I -i -E '\banch[o]r|temporal[ -]?(br[a]cket|w[i]ndow|b[o]und)|(verified|forensic)[ -]time[ -]w[i]ndow' -- || true)" \
+          "a retired term; say commit or commitment, and submission window"
+        report "$(files . | xargs -0 grep -s -H -n -I -i -E '\b(proof|format|bundle|envelope|specification)[ _-]?v[0-9]+\b' -- || true)" \
+          "a version-numbered format name"
+        report "$(files . | xargs -0 grep -s -H -n -I -E '\b(M[U]ST|REQ[U]IRED|SH[A]LL|SH[O]ULD|RECOMM[E]NDED|OPT[I]ONAL)\b' -- || true)" \
+          "a BCP 14 key word, which only SPEC.md uses"
+        exit $rc
+
+  # ===========================================================================
+  # Gates
+  # ===========================================================================
+
+  precommit:
+    desc: "Format, then every gate CI runs"
+    cmds:
+      - task: format
+      - task: gates
+
+  check:
+    desc: The CI gate. Like precommit, but checks formatting instead of changing files.
+    aliases: [ci]
+    cmds:
+      - task: format-check
+      - task: gates
+
+  gates:
+    internal: true
+    cmds:
+      - task: style
+      - task: spec-check
+      - task: compile
+      - task: credo
+      - task: dialyzer
+      - mix deps.unlock --check-unused
+      - task: test
+      - task: docs

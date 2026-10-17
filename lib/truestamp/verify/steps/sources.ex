@@ -15,14 +15,12 @@ defmodule Truestamp.Verify.Steps.Sources do
   `skip prior_failure` or `skip offline`; a failure at CHAIN does not close it.
   """
 
-  alias Truestamp.Verify.{Layout, Run}
   alias Truestamp.Verify.JSON.Pointer
+  alias Truestamp.Verify.{Layout, Run}
   alias Truestamp.Verify.Steps.Reads
 
   @doc "Step 11, SOURCES: one row for each entropy object."
   @spec sources(Run.t()) :: Run.t()
-  def sources(%Run{ended: true} = run), do: run
-
   def sources(%Run{proof: proof} = run) do
     {rows, run} =
       proof

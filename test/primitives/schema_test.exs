@@ -15,7 +15,15 @@ defmodule Truestamp.Verify.SchemaTest do
   use ExUnit.Case, async: true
 
   alias Truestamp.Verify.{JSON, Schema}
-  alias Truestamp.Verify.Test.{Cases, ProofMutants, Samples, SchemaSubset, StrictJSON}
+
+  alias Truestamp.Verify.Test.{
+    Cases,
+    ProofMutants,
+    Samples,
+    SchemaSubset,
+    StrictJSON,
+    Verification
+  }
 
   @schema_file Truestamp.Verify.Test.Verification.path("spec/schema.json")
   @external_resource @schema_file
@@ -39,7 +47,7 @@ defmodule Truestamp.Verify.SchemaTest do
     test "its keywords are the subset of SPEC.md 9, the test interpreter's list" do
       assert Schema.keywords() == SchemaSubset.keywords()
 
-      spec_md = File.read!(Truestamp.Verify.Test.Verification.path("SPEC.md"))
+      spec_md = File.read!(Verification.path("SPEC.md"))
       [_, section] = String.split(spec_md, "**The schema.**", parts: 2)
       [listed, _] = String.split(section, "and the boolean schemas", parts: 2)
 

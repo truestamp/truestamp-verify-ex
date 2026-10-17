@@ -1,0 +1,127 @@
+# Copyright (c) 2026 Truestamp, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Two jobs, one per tool set, each running every gate (task check): one on the tools
+# .tool-versions pins, and one on Elixir 1.19.3 with OTP 28.1.1, the oldest version mix.exs
+# allows.
+#
+# The tests read the conformance vectors from truestamp-verification, a private repository,
+# through a test-only Mix dependency. Fetching it needs the secret TRUESTAMP_VERIFICATION_TOKEN:
+# a fine-grained token with read access to that repository's contents, and nothing else.
+jobs:
+  check:
+    name: task check (.tool-versions)
+    # Pinned: mise finds prebuilt Erlang for Ubuntu 20.04, 22.04 and 24.04, and ubuntu-latest
+    # moves to a release it does not map.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    env:
+      # Prebuilt Erlang only (builds.hex.pm): mise fails rather than compile from source.
+      MISE_ERLANG_COMPILE: "false"
+      LANG: C.UTF-8
+
+    steps:
+      - name: Checkout
+        # A git checkout: task style lists the files to check with git ls-files.
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install Erlang, Elixir and Task via mise
+        uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1
+        with:
+          version: 2026.9.13
+          cache_key_prefix: mise-prebuilt
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Give git read access to truestamp-verification
+        env:
+          TOKEN: ${{ secrets.TRUESTAMP_VERIFICATION_TOKEN }}
+        run: |
+          test -n "$TOKEN" || { echo "The secret TRUESTAMP_VERIFICATION_TOKEN is not set."; exit 1; }
+          git config --global \
+            url."https://x-access-token:${TOKEN}@github.com/truestamp/truestamp-verification".insteadOf \
+            "https://github.com/truestamp/truestamp-verification"
+
+      - name: Restore the dependencies and builds
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: |
+            deps
+            _build
+          key: ${{ runner.os }}-mix-${{ hashFiles('.tool-versions') }}-${{ hashFiles('mix.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-mix-${{ hashFiles('.tool-versions') }}-
+
+      - name: Fetch the dependencies (task setup)
+        run: task setup
+
+      - name: Check that mix.lock is up to date
+        run: git diff --exit-code -- mix.lock
+
+      - name: The gate (task check)
+        run: task check
+
+  test-elixir-1-19:
+    name: task check (Elixir 1.19.3, OTP 28.1.1)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    env:
+      MISE_ERLANG_COMPILE: "false"
+      LANG: C.UTF-8
+      # mise takes these over the erlang and elixir lines of .tool-versions; Task still comes
+      # from .tool-versions. Both are prebuilt on builds.hex.pm for Ubuntu 24.04.
+      MISE_ERLANG_VERSION: "28.1.1"
+      MISE_ELIXIR_VERSION: "1.19.3-otp-28"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install Erlang, Elixir and Task via mise
+        uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1
+        with:
+          version: 2026.9.13
+          cache_key_prefix: mise-prebuilt-${{ env.MISE_ERLANG_VERSION }}-${{ env.MISE_ELIXIR_VERSION }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Give git read access to truestamp-verification
+        env:
+          TOKEN: ${{ secrets.TRUESTAMP_VERIFICATION_TOKEN }}
+        run: |
+          test -n "$TOKEN" || { echo "The secret TRUESTAMP_VERIFICATION_TOKEN is not set."; exit 1; }
+          git config --global \
+            url."https://x-access-token:${TOKEN}@github.com/truestamp/truestamp-verification".insteadOf \
+            "https://github.com/truestamp/truestamp-verification"
+
+      - name: Restore the dependencies and builds
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: |
+            deps
+            _build
+          key: ${{ runner.os }}-mix-erlang-${{ env.MISE_ERLANG_VERSION }}-elixir-${{ env.MISE_ELIXIR_VERSION }}-${{ hashFiles('mix.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-mix-erlang-${{ env.MISE_ERLANG_VERSION }}-elixir-${{ env.MISE_ELIXIR_VERSION }}-
+
+      - name: Fetch the dependencies (task setup)
+        run: task setup
+
+      - name: Check that mix.lock is up to date
+        run: git diff --exit-code -- mix.lock
+
+      - name: The gate (task check)
+        run: task check

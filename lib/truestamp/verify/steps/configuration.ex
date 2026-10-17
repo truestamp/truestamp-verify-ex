@@ -25,7 +25,7 @@ defmodule Truestamp.Verify.Steps.Configuration do
   (`Truestamp.Verify.ReadError`, exit code 1).
 
   In an online run, every Stellar and Bitcoin network the run pins must have a source, and
-  each source's identity is confirmed (`Truestamp.Verify.Online.Frame`); a source on the
+  each source's identity is confirmed, before the file is read; a source on the
   wrong network is `configuration_error`.
 
   When the step passes it reports one row, `pass`, with part null.

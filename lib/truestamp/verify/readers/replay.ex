@@ -12,7 +12,7 @@ defmodule Truestamp.Verify.Readers.Replay do
   spells the value it comes from. The reader finds an answer by building the same object.
 
   - The file stands as the operator-pinned source for each Stellar or Bitcoin network whose
-    identity read it holds, and for NIST: `c:sources/3` names one source, `"replay"`, for
+    identity read it holds, and for NIST: `c:Truestamp.Verify.Reader.sources/3` names one source, `"replay"`, for
     those, and none for any other network, which makes a run that pins one a
     `configuration_error` (section 10.2, step 0).
   - A read the file does not hold has no answer: it is unreachable, with the reason

@@ -20,8 +20,6 @@ defmodule Truestamp.Verify.Steps.KeyBinding do
 
   @doc "Step 5, KEY_BINDING."
   @spec key_binding(Run.t()) :: Run.t()
-  def key_binding(%Run{ended: true} = run), do: run
-
   def key_binding(%Run{keyring: nil} = run),
     do:
       Run.add_row(

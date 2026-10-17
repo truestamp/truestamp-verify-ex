@@ -257,20 +257,20 @@ defmodule Truestamp.Verify.Chains.Bitcoin do
 
     with {:final, context} <- final(context, height) do
       {answer, context} = Rule.read(context, :bitcoin_block_at_height, %{"height" => height})
-
-      case answer do
-        {:found, fields, _meta} ->
-          case Answer.field(fields, "hash", :hex64) |> Rule.compare(object["header_hash"]) do
-            :ok -> Rule.pass(context)
-            :contradiction -> Rule.fail(context, :chain_mismatch, %{"differs" => ["hash"]})
-            :unusable -> Rule.skip(context, :source_unreachable, %{"unusable" => ["hash"]})
-          end
-
-        other ->
-          settles_nothing(context, other)
-      end
+      genesis_block(context, answer, object["header_hash"])
     end
   end
+
+  # Only the hash of the best-chain block at the genesis object's height is compared.
+  defp genesis_block(context, {:found, fields, _meta}, header_hash) do
+    case fields |> Answer.field("hash", :hex64) |> Rule.compare(header_hash) do
+      :ok -> Rule.pass(context)
+      :contradiction -> Rule.fail(context, :chain_mismatch, %{"differs" => ["hash"]})
+      :unusable -> Rule.skip(context, :source_unreachable, %{"unusable" => ["hash"]})
+    end
+  end
+
+  defp genesis_block(context, answer, _header_hash), do: settles_nothing(context, answer)
 
   # Items 1 and 2: the tip, and finality.
   defp final(context, height) do
@@ -292,9 +292,10 @@ defmodule Truestamp.Verify.Chains.Bitcoin do
             Rule.skip(context, :source_unreachable, %{"unusable" => ["height"]})
         end
 
-      # The tip is never not found (section 13.2): such an answer is no usable one.
-      _not_found_or_unreachable ->
-        Rule.skip(context, :source_unreachable)
+      # A tip is never not found (section 13.2); a source that says so leaves the row as
+      # section 10.4 leaves any not-found answer its rules give no outcome for.
+      other ->
+        settles_nothing(context, other)
     end
   end
 

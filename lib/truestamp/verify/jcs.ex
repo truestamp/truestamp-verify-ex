@@ -145,10 +145,9 @@ defmodule Truestamp.Verify.JCS do
     end
   end
 
+  # OTP's `:short` form always writes a point: "100.0", "1.0e21".
   defp split_point(mantissa) do
-    case String.split(mantissa, ".") do
-      [integer_part, fraction_part] -> {integer_part, fraction_part}
-      [integer_part] -> {integer_part, ""}
-    end
+    [integer_part, fraction_part] = String.split(mantissa, ".")
+    {integer_part, fraction_part}
   end
 end

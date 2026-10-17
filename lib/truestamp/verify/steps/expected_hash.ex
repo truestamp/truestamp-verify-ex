@@ -24,7 +24,7 @@ defmodule Truestamp.Verify.Steps.ExpectedHash do
   statement (section 10.6).
 
   After a failure at the gate or at SHAPE the run has ended, and its EXPECTED_HASH row is
-  already `skip prior_failure`; such a run passes through unchanged. A failure at POLICY or
+  already `skip prior_failure`, and the step is not made. A failure at POLICY or
   DERIVE does not stop this step.
 
   **Values** (section 10.5): `expected_hash`, the caller's value lowercased, which the proof
@@ -62,8 +62,6 @@ defmodule Truestamp.Verify.Steps.ExpectedHash do
 
   @doc "Step 13, EXPECTED_HASH: one row."
   @spec expected_hash(Run.t()) :: Run.t()
-  def expected_hash(%Run{ended: true} = run), do: run
-
   def expected_hash(%Run{} = run), do: Run.add_row(run, row(run, run.config.expected_hash))
 
   @doc """

@@ -7,7 +7,7 @@ defmodule Truestamp.Verify.HashTest do
   # and every handover signature those proofs carry.
   use ExUnit.Case, async: true
 
-  alias Truestamp.Verify.{Base64URL, Ed25519, JCS, KeyId, JSON, Hash, Instant}
+  alias Truestamp.Verify.{Base64URL, Ed25519, Hash, Instant, JCS, JSON, KeyId}
 
   @root Truestamp.Verify.Test.Verification.root()
 

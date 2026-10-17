@@ -28,7 +28,7 @@ defmodule Truestamp.Verify.Reader do
 
   ## Sources and policies
 
-  A reader names the sources it has for a chain and network with `c:sources/3`: one, or
+  A reader names the sources it has for a chain and network with `c:Truestamp.Verify.Reader.sources/3`: one, or
   several under a policy that the engine applies to each row (`Truestamp.Verify.Online.Policy`).
   `"nist"` has no network, and is asked with network nil. Every source of a Stellar or
   Bitcoin network has its identity read at step 0 (section 10.2).

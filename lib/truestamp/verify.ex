@@ -32,8 +32,8 @@ defmodule Truestamp.Verify do
       report.submitted_before
 
   `verify/2` takes the options of `Truestamp.Verify.Config.external/1`, or a
-  `Truestamp.Verify.Config` built with `Config.external/1` or, for Truestamp's own verifier,
-  `Config.internal/1`. It gives:
+  `Truestamp.Verify.Config` built with `Truestamp.Verify.Config.external/1` or, for
+  Truestamp's own verifier, `Truestamp.Verify.Config.internal/1`. It gives:
 
   | Result | When |
   |---|---|

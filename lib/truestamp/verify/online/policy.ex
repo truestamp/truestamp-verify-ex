@@ -52,7 +52,11 @@ defmodule Truestamp.Verify.Online.Policy do
           {Outcome.t(), [{term(), Outcome.t()}]}
   def combine(policy, sources, evaluate, describe)
 
-  def combine(_policy, [source], evaluate, _describe) do
+  # One source, under a policy one source can satisfy: exactly that source's outcome, as with
+  # a single source and no policy at all. `{:at_least, n}` with fewer than n sources can
+  # never pass, and falls to the rules below.
+  def combine(policy, [source], evaluate, _describe)
+      when policy in [:first, :all, {:at_least, 1}] do
     outcome = evaluate.(source)
     {outcome, [{source, outcome}]}
   end

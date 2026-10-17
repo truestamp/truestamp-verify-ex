@@ -13,7 +13,7 @@ defmodule Truestamp.Verify.Online.Rule do
   `fail/3` or `skip/3`.
 
   The context's read function belongs to the engine, which binds it to one source and
-  enforces what holds for every source alike (`Truestamp.Verify.Online.Reads`): one answer
+  enforces what holds for every source alike: one answer
   per read in a run, a deadline over the run, no answer from a cache where the spec requires
   a live read, and no crash: a reader that raises gives an unreachable answer.
 

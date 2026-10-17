@@ -10,21 +10,30 @@ defmodule Truestamp.Verify.Steps.Reads do
   # |---|---|
   # | `:prior_failure` | `skip prior_failure` |
   # | `:offline` | `skip offline`, whose message names the read that would confirm it |
-  # | `:open` | the rule of section 10.4 against each source of the pinned network, combined by the network's policy (`Truestamp.Verify.Online.Policy`) |
+  # | `:open` | the rule of section 10.4 against each source of the pinned network, combined |
+  #
+  # An open gate's sources combine by the network's policy (`Truestamp.Verify.Online.Policy`).
   #
   # A source whose identity read gave no usable answer at step 0 serves no read: its outcome
   # is `skip source_unreachable`, with no read made. Every answer read is kept in the run, so
   # a later row that needs the same read uses it (section 10.4).
 
-  alias Truestamp.Verify.{Row, Run}
   alias Truestamp.Verify.Online.{Policy, Reads, Rule}
   alias Truestamp.Verify.Online.Rule.Outcome
+  alias Truestamp.Verify.{Row, Run}
 
   @doc false
   # The row of `step` at `part` for the rule `rule.(context)`, on the frame entry of
   # `{chain, network}`, with the run's memo of answers updated. `offline` names the read for
   # the `skip offline` message. `side` is the edge a passing row's candidate is for, or nil.
-  @spec row(Run.t(), atom(), String.t(), {String.t(), String.t() | nil}, map(), keyword()) ::
+  @spec row(
+          Run.t(),
+          atom(),
+          String.t(),
+          {String.t(), String.t() | nil},
+          (Rule.context() -> Rule.outcome()),
+          keyword()
+        ) ::
           {Row.t(), Run.t()}
   def row(%Run{external_gate: :prior_failure} = run, step, part, _key, _rule, _options),
     do: {Row.new(step, :prior_failure, part, Run.text(run, :prior_failure_external)), run}

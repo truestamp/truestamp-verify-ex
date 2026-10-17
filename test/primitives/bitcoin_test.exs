@@ -11,8 +11,8 @@ defmodule Truestamp.Verify.BitcoinTest do
   import Bitwise
 
   alias Truestamp.Verify.{Bitcoin, Instant}
-  alias Truestamp.Verify.Spec.Constants
   alias Truestamp.Verify.Bitcoin.{MerkleBlock, Transaction}
+  alias Truestamp.Verify.Spec.Constants
   alias Truestamp.Verify.Test.StrictJSON
 
   @dir Truestamp.Verify.Test.Verification.path("vectors/corpus/bitcoin")

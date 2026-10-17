@@ -10,7 +10,7 @@ defmodule Truestamp.Verify.ItemCodesTest do
 
   import Bitwise
 
-  alias Truestamp.Verify.{JSON, Hash}
+  alias Truestamp.Verify.{Hash, JSON}
   alias Truestamp.Verify.Test.StrictJSON
 
   @root Truestamp.Verify.Test.Verification.root()

@@ -7,8 +7,8 @@ defmodule Truestamp.Verify.InstantTest do
   # and the times the sound proofs carry.
   use ExUnit.Case, async: true
 
-  alias Truestamp.Verify.Test.StrictJSON
   alias Truestamp.Verify.Instant
+  alias Truestamp.Verify.Test.StrictJSON
 
   @root Truestamp.Verify.Test.Verification.root()
 

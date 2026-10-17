@@ -30,16 +30,14 @@ defmodule Truestamp.Verify.Steps.Chain do
   It states where the signing key came from, never attribution, and never feeds the window.
   """
 
-  alias Truestamp.Verify.{Layout, Row, Run}
   alias Truestamp.Verify.JSON.Pointer
+  alias Truestamp.Verify.{Layout, Row, Run}
   alias Truestamp.Verify.Steps.Reads
 
   @key_event_part "/signing_key_event"
 
   @doc "Step 10, CHAIN."
   @spec chain(Run.t()) :: Run.t()
-  def chain(%Run{ended: true} = run), do: run
-
   def chain(%Run{proof: proof} = run) do
     {rows, run} =
       proof

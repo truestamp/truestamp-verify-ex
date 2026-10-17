@@ -207,7 +207,7 @@ defmodule Truestamp.Verify.Chains.Stellar do
          {:ok, latest} <- Answer.field(fields, "latest", :int) do
       {:root, latest, context}
     else
-      _unusable -> Rule.skip(context, :source_unreachable)
+      other -> unsettled_root(context, other)
     end
   end
 
@@ -219,9 +219,15 @@ defmodule Truestamp.Verify.Chains.Stellar do
          {:ok, elder} <- Answer.field(fields, "elder", :int) do
       {:root, latest, elder, context}
     else
-      _unusable -> Rule.skip(context, :source_unreachable)
+      other -> unsettled_root(context, other)
     end
   end
+
+  # A root is never not found (section 13.2); a source that says so leaves the row as section
+  # 10.4 leaves any not-found answer its rules give no outcome for. Any other answer, or a
+  # field it lacks, is no usable answer.
+  defp unsettled_root(context, {:not_found, _meta}), do: Rule.skip(context, :not_held_by_source)
+  defp unsettled_root(context, _unusable), do: Rule.skip(context, :source_unreachable)
 
   # ---------------------------------------------------------------------------------------
   # Online: SOURCES

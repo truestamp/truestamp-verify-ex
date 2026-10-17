@@ -2,33 +2,36 @@
 # SPDX-License-Identifier: Apache-2.0
 
 defmodule Truestamp.Verify.Run do
-  @moduledoc false
-  # The state of a run (SPEC.md section 10.2): the rows so far and what the later steps
-  # read. CONFIGURATION creates it from a `Truestamp.Verify.Config`; each later step takes it
-  # and gives it back with its rows added; VERDICT sets its label. It is internal: a caller
-  # sees a `Truestamp.Verify.Report`.
-  #
-  # | Field | Holds | Set at |
-  # |---|---|---|
-  # | `config` | the run's configuration | CONFIGURATION |
-  # | `keyring` | the keyring that governs: a `Keyring`, `:unavailable`, or nil in keyless mode | CONFIGURATION |
-  # | `trust_root` | `%TrustRoot{}` of section 10.5 | CONFIGURATION |
-  # | `frame` | the sources of an online run, each with its identity's outcome | CONFIGURATION |
-  # | `reads` | the answers read so far, one per read (section 10.4) | CHAIN, SOURCES |
-  # | `deadline` | the monotonic millisecond the online run must end by, or nil | CONFIGURATION |
-  # | `document`, `proof` | the parsed document and P | PARSE, ENVELOPE |
-  # | `public_key`, `signature` | the 32 octets of K and the 64 of V | ENVELOPE |
-  # | `bound_key` | the key K bound to, or nil | KEY_BINDING |
-  # | `proof_hash` | the 32 octets of SHA-256(0x50 \|\| JCS(P)) | SIGNATURE |
-  # | `attribution` | nil until the gate is decided, then as section 10.5 says | SIGNATURE, or the step that ends the run |
-  # | `type`, `subject_id` | the proof's type and its subject's id, nil until SHAPE passes | SHAPE |
-  # | `trace` | the trace of section 10.6 | DERIVE |
-  # | `external_gate` | `:open`, `:offline` or `:prior_failure`, decided once when DERIVE ends | DERIVE |
-  # | `candidates` | `{:before | :after, edge}` for each passing row that gave one, in row order | CHAIN, SOURCES |
-  # | `edges` | `%{submitted_after, submitted_before}` as WINDOW drew them | WINDOW |
-  # | `rows` | the rows so far, in step order | every step |
-  # | `ended` | whether a failure ended the run | a failure at steps 4 to 7, or a caught fault |
-  # | `label`, `code` | the label and the run's code | VERDICT |
+  @moduledoc """
+  The state of a run (SPEC.md section 10.2): the rows so far and what the later steps
+  read. CONFIGURATION creates it from a `Truestamp.Verify.Config`; each later step takes it
+  and gives it back with its rows added; VERDICT sets its label.
+
+  | Field | Holds | Set at |
+  |---|---|---|
+  | `config` | the run's configuration | CONFIGURATION |
+  | `keyring` | the keyring that governs: a `Keyring`, `:unavailable`, or nil in keyless mode | CONFIGURATION |
+  | `trust_root` | `%TrustRoot{}` of section 10.5 | CONFIGURATION |
+  | `frame` | the sources of an online run, each with its identity's outcome | CONFIGURATION |
+  | `reads` | the answers read so far, one per read (section 10.4) | CHAIN, SOURCES |
+  | `deadline` | the monotonic millisecond the online run must end by, or nil | CONFIGURATION |
+  | `document`, `proof` | the parsed document and P | PARSE, ENVELOPE |
+  | `public_key`, `signature` | the 32 octets of K and the 64 of V | ENVELOPE |
+  | `bound_key` | the key K bound to, or nil | KEY_BINDING |
+  | `proof_hash` | the 32 octets of SHA-256(0x50 \|\| JCS(P)) | SIGNATURE |
+  | `attribution` | nil until the gate is decided, then as section 10.5 says | SIGNATURE, or a gate failure |
+  | `type`, `subject_id` | the proof's type and its subject's id, nil until SHAPE passes | SHAPE |
+  | `trace` | the trace of section 10.6 | DERIVE |
+  | `external_gate` | `:open`, `:offline` or `:prior_failure`, decided once when DERIVE ends | DERIVE |
+  | `candidates` | `{:before, edge}` or `{:after, edge}` for each passing row that gave one, in row order | CHAIN, SOURCES |
+  | `edges` | `%{submitted_after, submitted_before}` as WINDOW drew them | WINDOW |
+  | `rows` | the rows so far, in step order | every step |
+  | `ended` | whether a failure ended the run | a failure at steps 4 to 7, or a caught fault |
+  | `label`, `code` | the label and the run's code | VERDICT |
+
+  It is the engine's own state, which the step modules pass along; a caller reads a run only
+  through its `Truestamp.Verify.Report`, and its fields can change between releases.
+  """
 
   alias Truestamp.Verify.{Config, Keyring, Messages, Row, Step, TrustRoot}
 

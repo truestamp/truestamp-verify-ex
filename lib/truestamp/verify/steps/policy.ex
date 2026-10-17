@@ -23,13 +23,11 @@ defmodule Truestamp.Verify.Steps.Policy do
   external gate stays closed.
   """
 
-  alias Truestamp.Verify.{Layout, Row, Run}
   alias Truestamp.Verify.JSON.Pointer
+  alias Truestamp.Verify.{Layout, Row, Run}
 
   @doc "Step 8, POLICY: one row for each `network` of P, against the run's pins."
   @spec policy(Run.t()) :: Run.t()
-  def policy(%Run{ended: true} = run), do: run
-
   def policy(%Run{proof: proof, config: %{networks: pins}} = run) do
     rows =
       proof

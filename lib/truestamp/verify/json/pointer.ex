@@ -53,9 +53,9 @@ defmodule Truestamp.Verify.JSON.Pointer do
   defp compare_segments(x, _y) when is_integer(x), do: :lt
   defp compare_segments(_x, _y), do: :gt
 
-  defp order(x, y) when x < y, do: :lt
-  defp order(x, y) when x > y, do: :gt
-  defp order(_x, _y), do: :eq
+  # Two segments that are equal never reach here: compare/2 has matched them already, and two
+  # different names differ in their UTF-16 code units.
+  defp order(x, y), do: if(x < y, do: :lt, else: :gt)
 
   # RFC 8785 section 3.2.3: in UTF-16BE, comparing the bytes compares the code units, and a
   # name that is a prefix of another sorts first.

@@ -22,8 +22,6 @@ defmodule Truestamp.Verify.Steps.Signature do
 
   @doc "Step 6, SIGNATURE."
   @spec signature(Run.t()) :: Run.t()
-  def signature(%Run{ended: true} = run), do: run
-
   def signature(%Run{proof: proof, public_key: public_key, signature: value} = run) do
     proof_hash = Hash.hash(:proof_hash, proof)
     values = %{"proof_hash" => Base.encode16(proof_hash, case: :lower)}

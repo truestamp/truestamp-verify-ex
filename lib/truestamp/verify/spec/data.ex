@@ -27,8 +27,15 @@ defmodule Truestamp.Verify.Spec.Data do
 
   @doc "The value of `spec/<name>`, read under section 10.1. Raises when it breaks a rule."
   @spec read!(String.t()) :: JSON.value()
-  def read!(name) do
-    case name |> path() |> File.read!() |> JSON.decode() do
+  def read!(name), do: name |> path() |> File.read!() |> decode!(name)
+
+  @doc """
+  The value of `bytes`, the contents of `spec/<name>`, read under section 10.1. Raises when
+  they break a rule, naming the file.
+  """
+  @spec decode!(binary(), String.t()) :: JSON.value()
+  def decode!(bytes, name) do
+    case JSON.decode(bytes) do
       {:ok, value} -> value
       {:error, reason} -> raise ArgumentError, "spec/#{name}: #{inspect(reason)}"
     end

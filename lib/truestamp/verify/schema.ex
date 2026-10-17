@@ -56,7 +56,10 @@ defmodule Truestamp.Verify.Schema do
                additionalProperties minProperties pattern minLength maxLength minimum maximum
                items maxItems)
 
-  @types ~w(object array string integer number boolean null)
+  # The types and the kinds of constant `spec/schema.json` uses. JSON Schema allows more, and
+  # the build refuses a schema that uses one this checker does not interpret, so a change to
+  # the schema that needs more fails loudly here rather than checking it wrong.
+  @types ~w(object array string integer)
 
   # ECMA-262's `$`, without the multiline flag, matches only at the end of the input.
   @regex_options [:unicode, :dollar_endonly]
@@ -86,6 +89,8 @@ defmodule Truestamp.Verify.Schema do
   types = @types
   regex_options = @regex_options
 
+  scalar? = fn value -> is_binary(value) or is_integer(value) end
+
   # The reason a schema object's keyword is outside the subset, or nil.
   refusal = fn
     {"$ref", "#/$defs/" <> name} ->
@@ -102,7 +107,15 @@ defmodule Truestamp.Verify.Schema do
         do: "a pattern that does not compile: #{inspect(pattern)}"
 
     {"type", arg} ->
-      unless Enum.all?(List.wrap(arg), &(&1 in types)), do: "an unknown type #{inspect(arg)}"
+      unless Enum.all?(List.wrap(arg), &(&1 in types)),
+        do: "a type this checker does not interpret: #{inspect(arg)}"
+
+    {"const", arg} ->
+      unless scalar?.(arg), do: "a const that is not a string or an integer: #{inspect(arg)}"
+
+    {"enum", args} ->
+      unless is_list(args) and Enum.all?(args, scalar?),
+        do: "an enum of values that are not strings or integers: #{inspect(args)}"
 
     {key, _arg} ->
       unless key in keywords, do: "#{key}, a keyword outside the subset"
@@ -254,24 +267,12 @@ defmodule Truestamp.Verify.Schema do
   defp type?("array", value), do: is_list(value)
   defp type?("string", value), do: is_binary(value)
   defp type?("integer", value), do: is_integer(value) or integral_float?(value)
-  defp type?("number", value), do: is_number(value)
-  defp type?("boolean", value), do: is_boolean(value)
-  defp type?("null", value), do: is_nil(value)
 
   defp integral_float?(value), do: is_float(value) and Float.floor(value) == value
 
-  # JSON equality: numbers by value, strings and literals exactly, objects and arrays member
-  # by member.
-  defp equal?(a, b) when is_number(a) and is_number(b), do: a == b
-
-  defp equal?(a, b) when is_map(a) and is_map(b) do
-    map_size(a) == map_size(b) and
-      Enum.all?(a, fn {name, x} -> is_map_key(b, name) and equal?(x, Map.fetch!(b, name)) end)
-  end
-
-  defp equal?(a, b) when is_list(a) and is_list(b),
-    do: length(a) == length(b) and a |> Enum.zip(b) |> Enum.all?(fn {x, y} -> equal?(x, y) end)
-
+  # JSON equality, for the constants the build allows, strings and integers: a number by
+  # value, so the integer 1 equals the float 1.0, and a string exactly.
+  defp equal?(a, b) when is_integer(a) and is_number(b), do: a == b
   defp equal?(a, b), do: a === b
 
   defp code_points(string), do: string |> String.codepoints() |> length()

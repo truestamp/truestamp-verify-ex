@@ -58,8 +58,6 @@ defmodule Truestamp.Verify.Steps.Shape do
 
   @doc "Step 7, SHAPE: the six checks above, in order, on the run's P."
   @spec shape(Run.t()) :: Run.t()
-  def shape(%Run{ended: true} = run), do: run
-
   def shape(%Run{proof: proof} = run) when is_map(proof) do
     with nil <- format(proof),
          nil <- version(proof),

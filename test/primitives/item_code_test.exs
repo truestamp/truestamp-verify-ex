@@ -12,7 +12,7 @@ defmodule Truestamp.Verify.ItemCodeTest do
 
   import Bitwise, only: [bxor: 2]
 
-  alias Truestamp.Verify.{ItemCode, JSON, Hash}
+  alias Truestamp.Verify.{Hash, ItemCode, JSON}
 
   @root Truestamp.Verify.Test.Verification.root()
   @vectors Path.join(@root, "vectors")
