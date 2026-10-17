@@ -57,6 +57,7 @@ defmodule Truestamp.Verify.CLI do
     Step
   }
 
+  alias Truestamp.Verify.CLI.Messages
   alias Truestamp.Verify.Steps.Verdict
 
   @usage "Usage: mix truestamp.verify FILE [--keyring FILE | --no-keyring] " <>
@@ -108,12 +109,15 @@ defmodule Truestamp.Verify.CLI do
 
   @doc """
   Runs the steps of section 10.2 over the file at `path` with `options` and gives the
-  command's outcome, writing the trace to the file `trace` when it is not nil. A fault that
-  leaves no report, an invalid option included, gives exit code 2.
+  command's outcome, writing the trace to the file `trace` when it is not nil. Its messages
+  are `Truestamp.Verify.CLI.Messages`, which name the command's options, unless `options`
+  set others. A fault that leaves no report, an invalid option included, gives exit code 2.
   """
   @spec execute(keyword(), Path.t(), Path.t() | nil) :: outcome()
   def execute(options, path, trace \\ nil) do
-    path |> Verify.verify_file(options) |> outcome(trace)
+    path
+    |> Verify.verify_file(Keyword.put_new(options, :messages, Messages))
+    |> outcome(trace)
   catch
     kind, reason -> fault(Exception.format_banner(kind, reason, __STACKTRACE__))
   end

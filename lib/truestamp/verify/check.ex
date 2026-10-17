@@ -65,15 +65,18 @@ defmodule Truestamp.Verify.Check do
 
   - `:code`, the failure's code;
   - `:traced`, true by default;
-  - `:noun`, what the value is, an atom the message module names (`:value` by default).
+  - `:noun`, what the value is, an atom the message module names (`:value` by default);
+  - `:assigns`, further assigns for the message, such as where the inclusion proof is
+    that walks to the value.
   """
   @spec equal(Pointer.t(), String.t(), [Pointer.t()], term(), term(), keyword()) :: t()
   def equal(part, construction, inputs, declared, recomputed, options \\ []) do
-    assigns = %{
-      noun: Keyword.get(options, :noun, :value),
-      part: Pointer.encode(part),
-      construction: construction
-    }
+    assigns =
+      Map.merge(Keyword.get(options, :assigns, %{}), %{
+        noun: Keyword.get(options, :noun, :value),
+        part: Pointer.encode(part),
+        construction: construction
+      })
 
     {outcome, id} =
       if declared === recomputed,

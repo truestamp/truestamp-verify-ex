@@ -105,6 +105,14 @@ defmodule Truestamp.Verify.MessagesTest do
       assert English.message(:value_recomputed, %{noun: noun, part: "/p"}) =~ " at /p equals"
     end
 
+    assert English.message(:value_recomputed, %{
+             noun: :inclusion_root,
+             inclusion_proof: "/commitments/bitcoin/inclusion_proof",
+             part: "/p"
+           }) ==
+             "The merkle_root the inclusion proof at /commitments/bitcoin/inclusion_proof " <>
+               "walks to at /p equals the value this run recomputed for it."
+
     for read <- [
           {:commitment, "stellar", true},
           {:commitment, "stellar", false},

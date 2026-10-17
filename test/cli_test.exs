@@ -463,6 +463,41 @@ defmodule Truestamp.Verify.CLITest do
       assert stderr =~ "Trust root: supplied_keyring, from #{@test_keyring}, SHA-256 "
     end
 
+    test "names the command's options where a message says how to run again" do
+      {3, stdout, _stderr} = main([@item])
+
+      assert Enum.find(document(stdout)["rows"], &(&1["code"] == "environment_mismatch"))[
+               "message"
+             ] =~ "run again with --environment test and --keyring FILE."
+
+      staging = Path.join(tmp(), "staging.proof.json")
+
+      File.write!(
+        staging,
+        "item" |> Signing.positive() |> Map.put("environment", "staging") |> Signing.signed()
+      )
+
+      {3, stdout, _stderr} = main([staging, "--environment", "dev", "--no-keyring"])
+      assert stdout =~ "this run checks proofs of its dev environment. To check it against"
+
+      dev = "item" |> Signing.positive() |> Map.put("environment", "dev") |> Signing.signed()
+      {3, stdout, _stderr} = main([write(dev)])
+      assert stdout =~ "environment, which is for development. It is not a production proof."
+
+      {3, stdout, _stderr} =
+        main([
+          Signing.production("item") |> then(&write(&1)),
+          "--environment",
+          "test",
+          "--no-keyring"
+        ])
+
+      assert stdout =~ "run again without --environment."
+
+      {8, stdout, _stderr} = main([@item, "--environment", "test"])
+      assert document(stdout)["message"] =~ "run again with --keyring FILE, or with --no-keyring"
+    end
+
     test "says keyless mode in words when the run fails at the gate, before KEY_BINDING runs" do
       {3, _stdout, stderr} = main([@item, "--no-keyring"])
       assert stderr =~ "Code: environment_mismatch"
@@ -519,6 +554,12 @@ defmodule Truestamp.Verify.CLITest do
 
       assert lines =~ "Submitted after: not established in this run.\n"
     end
+  end
+
+  defp write(bytes) do
+    path = Path.join(tmp(), "proof.json")
+    File.write!(path, bytes)
+    path
   end
 
   defp tmp do

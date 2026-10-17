@@ -189,11 +189,11 @@ defmodule Truestamp.Verify.Messages.English do
 
   # DERIVE
 
-  def message(:value_recomputed, %{noun: noun, part: part}),
-    do: "#{noun(noun)} at #{part} equals the value this run recomputed for it."
+  def message(:value_recomputed, %{part: part} = assigns),
+    do: "#{noun(assigns)} at #{part} equals the value this run recomputed for it."
 
-  def message(:value_not_recomputed, %{noun: noun, part: part, construction: construction}) do
-    "#{noun(noun)} at #{part} is not the value this run recomputed for it, by the " <>
+  def message(:value_not_recomputed, %{part: part, construction: construction} = assigns) do
+    "#{noun(assigns)} at #{part} is not the value this run recomputed for it, by the " <>
       "constructions row #{construction}."
   end
 
@@ -380,7 +380,10 @@ defmodule Truestamp.Verify.Messages.English do
   @spec nouns() :: [atom()]
   def nouns, do: Map.keys(@nouns)
 
-  defp noun(noun), do: Map.fetch!(@nouns, noun)
+  defp noun(%{noun: :inclusion_root, inclusion_proof: at}),
+    do: "The merkle_root the inclusion proof at #{at} walks to"
+
+  defp noun(%{noun: noun}), do: Map.fetch!(@nouns, noun)
 
   defp would({:commitment, "stellar", true}) do
     "The read of this Stellar transaction on the pinned network, and of the ledger it names, " <>

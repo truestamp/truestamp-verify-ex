@@ -123,7 +123,8 @@ defmodule Truestamp.Verify.Steps.Derive.Links do
 
     [
       Check.equal(r ++ ["merkle_root"], "inclusion", [q, leaf_at], record["merkle_root"], root,
-        noun: :inclusion_root
+        noun: :inclusion_root,
+        assigns: %{inclusion_proof: Pointer.encode(q)}
       ),
       Check.equal(
         q ++ ["tree_size"],
