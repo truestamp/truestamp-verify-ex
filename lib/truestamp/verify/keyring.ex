@@ -122,11 +122,14 @@ defmodule Truestamp.Verify.Keyring do
 
   @doc """
   The keyring of Truestamp's own verifier: the 32-octet keys of its verified key chain
-  (section 8.2), which the caller has already checked. No load checks apply: a key chain is
-  not a keyring a verifier reads.
+  (section 8.2), which the caller has already checked, in a run whose E_v is `environment`.
+  A key chain is not a keyring a verifier reads, so the checks of its form do not apply, but
+  the checks of the environment do, since no run whose E_v is `prod` can bind a
+  non-production key (section 6.4): checks 6 and 7 above. `{:ok, keyring}`, or
+  `{:error, failure}` naming the check that refused.
   """
-  @spec from_key_chain([<<_::256>>]) :: t()
-  def from_key_chain(keys) when is_list(keys) do
+  @spec from_key_chain([<<_::256>>], String.t()) :: {:ok, t()} | {:error, failure()}
+  def from_key_chain(keys, environment) when is_list(keys) do
     keys =
       keys
       |> Enum.with_index()
@@ -134,8 +137,18 @@ defmodule Truestamp.Verify.Keyring do
         %{active: true, key_id: KeyId.of(key), public_key: key, sequence: sequence}
       end)
 
-    %__MODULE__{keys: keys, digest: nil, location: nil}
+    with :ok <- each_key(keys, &vector_key(&1, environment)),
+         :ok <- each_key(keys, &nonproduction_key(&1, environment)),
+         do: {:ok, %__MODULE__{keys: keys, digest: nil, location: nil}}
   end
+
+  @doc """
+  Where Truestamp publishes its keyring, `https://www.truestamp.com/.well-known/keyring.json`:
+  the one location a `current_keyring` reads (sections 8.3 and 10.5). A keyring read from
+  anywhere else is a supplied keyring.
+  """
+  @spec truestamp_url() :: String.t()
+  def truestamp_url, do: "https://www.truestamp.com/.well-known/keyring.json"
 
   # The load checks of section 10.2, step 0, on a parsed keyring.
   defp check(value, environment) do

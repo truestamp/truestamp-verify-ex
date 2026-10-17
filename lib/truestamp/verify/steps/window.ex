@@ -126,7 +126,7 @@ defmodule Truestamp.Verify.Steps.Window do
 
     if outside? do
       part = if type in ["block", "beacon"], do: "/block/record/id", else: "/subject/record/id"
-      values = %{"id_time" => DateTime.to_iso8601(DateTime.from_unix!(time, :millisecond))}
+      values = %{"id_time" => id_time_text(time)}
 
       Run.add_row(
         run,
@@ -134,7 +134,9 @@ defmodule Truestamp.Verify.Steps.Window do
           :window,
           :recorded_time_outside_window,
           part,
-          Run.text(run, :recorded_time_outside_window),
+          Run.text(run, :recorded_time_outside_window, %{
+            attributed: run.attribution == "truestamp"
+          }),
           values
         )
       )
@@ -147,4 +149,13 @@ defmodule Truestamp.Verify.Steps.Window do
   # digits, the hyphen skipped, an unsigned big-endian count of milliseconds.
   defp id_time(<<a::binary-8, "-", b::binary-4, _rest::binary>>),
     do: String.to_integer(a <> b, 16)
+
+  # The id's time as an instant, or, for a time past the year 9999 that its 48 bits can
+  # hold, its count of milliseconds.
+  defp id_time_text(milliseconds) do
+    case DateTime.from_unix(milliseconds, :millisecond) do
+      {:ok, instant} -> DateTime.to_iso8601(instant)
+      {:error, _beyond} -> milliseconds
+    end
+  end
 end

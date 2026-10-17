@@ -122,6 +122,23 @@ defmodule Truestamp.Verify.Chains.BitcoinTest do
 
       assert verdict(commitment(base)) == {:skip, :source_unreachable}
     end
+
+    test "a median time past past the year 9999, which no TIME can write, is unusable" do
+      base = final(at(@height, block(%{})))
+      last = 253_402_300_799
+
+      assert verdict(
+               commitment(
+                 Map.merge(base, at(@height + 10, block(%{"median_time_past" => last + 1})))
+               )
+             ) == {:skip, :source_unreachable}
+
+      outcome =
+        commitment(Map.merge(base, at(@height + 10, block(%{"median_time_past" => last}))))
+
+      assert verdict(outcome) == {:pass, nil}
+      assert Edge.instant_string(outcome.candidate) == "9999-12-31T23:59:59Z"
+    end
   end
 
   describe "genesis.bitcoin" do
@@ -186,6 +203,16 @@ defmodule Truestamp.Verify.Chains.BitcoinTest do
 
       assert verdict(entropy(found(%{"height" => 200, "time" => 1_790_387_100}))) ==
                {:skip, :source_unreachable}
+
+      assert verdict(
+               entropy(
+                 found(%{
+                   "height" => 200,
+                   "median_time_past" => 300_000_000_000,
+                   "time" => 1_790_387_100
+                 })
+               )
+             ) == {:skip, :source_unreachable}
 
       assert verdict(entropy(not_found())) == {:skip, :not_held_by_source}
       assert verdict(entropy(unreachable())) == {:skip, :source_unreachable}

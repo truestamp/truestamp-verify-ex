@@ -88,13 +88,22 @@ defmodule Truestamp.Verify.Readers.HTTPTest do
   end
 
   test "Online.defaults/1: the reader, the current keyring, and the options given" do
-    options = Online.defaults(deadline: 10_000, keyring_origin: "https://keys.test")
+    options = Online.defaults(deadline: 10_000)
     assert {HTTP, _state} = options[:reader]
-    assert {WellKnown, [base_url: "https://keys.test"]} = options[:current_keyring]
+    assert {WellKnown, [base_url: "https://www.truestamp.com"]} = options[:current_keyring]
     assert options[:deadline] == 10_000
+    assert %Verify.Config{trust: :default} = Verify.Config.external!(options)
+  end
 
-    assert {WellKnown, [base_url: "https://www.truestamp.com"]} =
-             Online.defaults()[:current_keyring]
+  test "Online.defaults/1: a keyring from another origin is a supplied keyring (8.3)" do
+    options = Online.defaults(keyring_origin: "https://keys.test")
+    refute Keyword.has_key?(options, :current_keyring)
+    refute Keyword.has_key?(options, :keyring_origin)
+
+    assert options[:trust] ==
+             {:keyring_source, {WellKnown, [base_url: "https://keys.test"]}}
+
+    assert %Verify.Config{trust: {:keyring_source, _source}} = Verify.Config.external!(options)
   end
 
   describe "an online run, every server stubbed" do
@@ -240,11 +249,13 @@ defmodule Truestamp.Verify.Readers.HTTPTest do
         Verify.Config.internal!(
           environment: :prod,
           networks: pins,
-          key_chain: [Signing.public_key(0x42)],
+          key_chain: [Signing.public_key()],
           reader: reader
         )
 
-      {:ok, %Report{} = report} = Verify.verify(Signing.production("item", 0x42), config)
+      {:ok, %Report{} = report} =
+        Verify.verify(Signing.production_without_key_event("item"), config)
+
       assert report.label == :verified, inspect(Enum.reject(report.rows, &(&1.status == :pass)))
       assert report.submitted_before.source == "horizon https://horizon.test"
       assert report.submitted_after != nil

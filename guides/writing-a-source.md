@@ -12,7 +12,7 @@ without touching the engine. Pick the smallest contract that fits:
 |---|---|
 | read a chain from another kind of server, beside the bundled ones | `Truestamp.Verify.Source`, used through `Truestamp.Verify.Readers.HTTP` |
 | answer reads from anything else: a cache, a database, a queue | `Truestamp.Verify.Reader` |
-| fetch the keyring Truestamp publishes over another channel | `Truestamp.Verify.KeyringSource` |
+| read a keyring over another channel, as a supplied keyring | `Truestamp.Verify.KeyringSource` |
 
 ## A source
 
@@ -83,10 +83,17 @@ reader need not guard against its own failures.
 ## A keyring source
 
 A keyring source has one callback, `fetch/1`, which gives the keyring's bytes, or its
-decoded value, with where it came from. The engine loads it through the load checks of
-step 0, so a keyring that fails one makes the run a `configuration_error`, and a fetch that
-fails leaves no key to bind. `Truestamp.Verify.KeyringSources.WellKnown` reads Truestamp's
-over HTTPS; one for DNS, or for a file your deployment ships, takes a few lines.
+decoded value, with where it came from and the meta of the read. The engine loads it
+through the load checks of step 0. A keyring that fails one, a fetch that fails, and an
+answer marked cached are each a failed read, so no key binds and KEY_BINDING fails with
+`keyring_unavailable`.
+
+`Truestamp.Verify.KeyringSources.WellKnown` reads `/.well-known/keyring.json` over HTTPS.
+One for DNS, or for a file your deployment ships, takes a few lines, and gives a supplied
+keyring: pass it as the trust `{:keyring_source, source}`. Only the keyring read from
+`https://www.truestamp.com/.well-known/keyring.json` attributes a proof to Truestamp, so a
+source given as `:current_keyring` that reports another location makes the run a
+`configuration_error`.
 
 ## Testing it
 

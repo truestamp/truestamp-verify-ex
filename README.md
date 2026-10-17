@@ -63,10 +63,11 @@ without it, the HTTP sources are not compiled, and everything else works.
 ## Verifying a proof
 
 ```elixir
-# Offline, in production, against the keys built into this library.
+# Offline, in production, against the keys built into this library: :internally_consistent
+# for a sound proof signed by one of them. The compiled pin holds no key yet, so today a
+# production proof fails KEY_BINDING offline; check it online, or with a keyring of its key.
 {:ok, report} = Truestamp.Verify.verify(File.read!("proof.json"))
 report.label
-#=> :internally_consistent
 
 # A test vector of the specification: its environment and the keyring of its keys.
 {:ok, report} =

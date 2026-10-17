@@ -9,11 +9,11 @@ defmodule Truestamp.Verify.Steps.Configuration do
 
   | Role and trust | Keyring that governs | `trust_root.kind` |
   |---|---|---|
-  | internal, a verified key chain | its keys | `key_chain` |
+  | internal, a verified key chain | its keys; under `prod`, a non-production key, and outside `test`, VECTOR_KEY, is `configuration_error` (section 6.4) | `key_chain` |
   | internal, `:unavailable` | none: key binding fails `keyring_unavailable` | `key_chain` |
   | external, `:keyless` | none: keyless mode | `none` |
   | external, `:default`, `prod`, offline | the compiled pin | `compiled_pin` |
-  | external, `:default`, `prod`, online | the keyring read in this run from Truestamp; a failed read binds no key | `current_keyring` |
+  | external, `:default`, `prod`, online | the keyring read in this run from `https://www.truestamp.com/.well-known/keyring.json`; a failed read binds no key, and a source that read another location is `configuration_error` | `current_keyring` |
   | external, `:default`, another E_v | `configuration_error` (section 6.4) | |
   | external, a supplied keyring's bytes or file | that keyring | `supplied_keyring` |
   | external, `{:keyring_source, ...}` | the keyring read in this run; a failed read binds no key | `supplied_keyring` |
@@ -21,8 +21,9 @@ defmodule Truestamp.Verify.Steps.Configuration do
   Every keyring is loaded through the load checks of step 0 (`Truestamp.Verify.Keyring`). A
   keyring file or a configured keyring that fails one is `configuration_error`; a keyring
   read online that fails, for any reason, is a failed read, never a bare rejection (section
-  8.3). A keyring file that cannot be read at all is an input that cannot be read
-  (`Truestamp.Verify.ReadError`, exit code 1).
+  8.3). A keyring read online is the one read in this run, so an answer its source marks
+  cached is a failed read too. A keyring file that cannot be read at all is an input that
+  cannot be read (`Truestamp.Verify.ReadError`, exit code 1).
 
   In an online run, every Stellar and Bitcoin network the run pins must have a source, and
   each source's identity is confirmed, before the file is read; a source on the
@@ -34,6 +35,8 @@ defmodule Truestamp.Verify.Steps.Configuration do
   alias Truestamp.Verify.{Config, JSON, Keyring, ReadError, Rejection, Row, Run, TrustRoot}
   alias Truestamp.Verify.Messages
   alias Truestamp.Verify.Online.Frame
+
+  @truestamp_url Keyring.truestamp_url()
 
   @doc "Step 0: `{:ok, run}`, a bare rejection, or an input that cannot be read."
   @spec configuration(Config.t()) ::
@@ -76,8 +79,12 @@ defmodule Truestamp.Verify.Steps.Configuration do
   defp governing_keyring(%Config{trust: {:key_chain, :unavailable}}),
     do: {:ok, :unavailable, %TrustRoot{kind: :key_chain}}
 
-  defp governing_keyring(%Config{trust: {:key_chain, keys}}),
-    do: {:ok, Keyring.from_key_chain(keys), %TrustRoot{kind: :key_chain}}
+  defp governing_keyring(%Config{trust: {:key_chain, keys}} = config) do
+    case Keyring.from_key_chain(keys, config.environment) do
+      {:ok, keyring} -> {:ok, keyring, %TrustRoot{kind: :key_chain}}
+      {:error, failure} -> refused(config, failure)
+    end
+  end
 
   defp governing_keyring(%Config{trust: :keyless}), do: {:ok, nil, %TrustRoot{kind: :none}}
 
@@ -114,22 +121,37 @@ defmodule Truestamp.Verify.Steps.Configuration do
     end
   end
 
-  # A keyring read online: any failure is a failed read, so no key binds (section 8.3).
+  # A keyring read online: any failure is a failed read, so no key binds (section 8.3). The
+  # keyring is the one "read in this run" (sections 8.3 and 10.5), so an answer from a cache
+  # is a failed read too. Only the keyring read from Truestamp's own URL is a current
+  # keyring; a source that read another is a configuration the caller wrote wrong, since a
+  # keyring from another origin is a supplied keyring (section 8.3).
   defp read_online({module, state}, config, kind) do
     case fetch(module, state) do
-      {:ok, keyring, location, _meta} ->
-        case load_read(keyring, config.environment, location) do
-          {:ok, keyring} ->
-            {:ok, keyring, %TrustRoot{kind: kind, digest: keyring.digest, location: location}}
-
-          {:error, _failure} ->
-            {:ok, :unavailable, %TrustRoot{kind: kind, location: location}}
-        end
+      {:ok, keyring, location, meta} when is_binary(location) ->
+        fetched(keyring, location, meta, config, kind)
 
       _failed ->
         {:ok, :unavailable, %TrustRoot{kind: kind}}
     end
   end
+
+  defp fetched(_keyring, location, _meta, config, :current_keyring)
+       when location != @truestamp_url,
+       do: rejected(config, :configuration_current_keyring_location, %{location: location})
+
+  defp fetched(keyring, location, %{cached: false}, config, kind) do
+    case load_read(keyring, config.environment, location) do
+      {:ok, keyring} ->
+        {:ok, keyring, %TrustRoot{kind: kind, digest: keyring.digest, location: location}}
+
+      {:error, _failure} ->
+        {:ok, :unavailable, %TrustRoot{kind: kind, location: location}}
+    end
+  end
+
+  defp fetched(_keyring, location, _cached_or_malformed, _config, kind),
+    do: {:ok, :unavailable, %TrustRoot{kind: kind, location: location}}
 
   defp fetch(module, state) do
     module.fetch(state)

@@ -16,6 +16,11 @@ defmodule Truestamp.Verify.Online.AnswerTest do
     assert Answer.field(%{"n" => @max + 1}, "n", :int) == :error
     assert Answer.field(%{"n" => -1}, "n", :int) == :error
     assert Answer.field(%{"n" => 1.0}, "n", :int) == :error
+
+    # Unix seconds a TIME can write: the years 0000 to 9999 (section 2.4).
+    assert Answer.field(%{"t" => 253_402_300_799}, "t", :unix_time) == {:ok, 253_402_300_799}
+    assert Answer.field(%{"t" => 253_402_300_800}, "t", :unix_time) == :error
+    assert Answer.field(%{"t" => -1}, "t", :unix_time) == :error
   end
 
   test "the string classes match their patterns in full" do

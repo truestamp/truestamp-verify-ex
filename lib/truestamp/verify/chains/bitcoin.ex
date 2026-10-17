@@ -329,7 +329,7 @@ defmodule Truestamp.Verify.Chains.Bitcoin do
 
     case answer do
       {:found, fields, meta} ->
-        case Answer.field(fields, "median_time_past", :int) do
+        case Answer.field(fields, "median_time_past", :unix_time) do
           {:ok, seconds} -> Rule.pass(context, edge(seconds, :before, context.part, meta))
           :error -> Rule.skip(context, :source_unreachable, %{"unusable" => ["median_time_past"]})
         end
@@ -352,12 +352,12 @@ defmodule Truestamp.Verify.Chains.Bitcoin do
         checks = [
           {"height", Answer.field(fields, "height", :int) |> Rule.compare(payload["height"])},
           {"time", Answer.field(fields, "time", :int) |> Rule.compare(payload["time"])},
-          {"median_time_past", Answer.field(fields, "median_time_past", :int) |> present()}
+          {"median_time_past", Answer.field(fields, "median_time_past", :unix_time) |> present()}
         ]
 
         case Rule.decide(checks) do
           :ok ->
-            {:ok, seconds} = Answer.field(fields, "median_time_past", :int)
+            {:ok, seconds} = Answer.field(fields, "median_time_past", :unix_time)
             Rule.pass(context, edge(seconds, :after, context.part, meta))
 
           {:contradiction, names} ->

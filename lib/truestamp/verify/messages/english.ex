@@ -14,7 +14,8 @@ defmodule Truestamp.Verify.Messages.English do
   alias Truestamp.Verify.Keyring
 
   @ids ~w(configuration_pass configuration_no_keyring configuration_keyring_refused
-          configuration_no_source configuration_identity_forbidden read_pass input_too_large
+          configuration_no_source configuration_identity_forbidden
+          configuration_current_keyring_location read_pass input_too_large
           parse_pass malformed_json envelope_pass invalid_envelope environment_pass
           environment_mismatch_unmarked environment_mismatch_marked_under_prod
           environment_mismatch_marked environment_mismatch_unknown_marker keyless
@@ -54,6 +55,13 @@ defmodule Truestamp.Verify.Messages.English do
   def message(:configuration_keyring_refused, %{failure: failure}),
     do:
       "The keyring fails a load check, so the run gives no verdict: #{Keyring.describe(failure)}."
+
+  def message(:configuration_current_keyring_location, %{location: location}) do
+    "The current keyring is the one Truestamp publishes at " <>
+      "#{Keyring.truestamp_url()}, and this run's source read #{location}. A keyring from " <>
+      "another origin is a supplied keyring: give its source as the trust " <>
+      "{:keyring_source, source}."
+  end
 
   def message(:configuration_no_source, %{chain: chain, network: network}),
     do: "This online run pins the #{chain} network #{network}, and has no source for it."
@@ -299,8 +307,15 @@ defmodule Truestamp.Verify.Messages.English do
   def message(:window_pass, _assigns),
     do: "The submission window is drawn from instants read in this run."
 
-  def message(:recorded_time_outside_window, _assigns) do
+  # SPEC.md 11.5: a time other than an edge is "Recorded by Truestamp" only when the run
+  # attributes the proof to Truestamp, and otherwise the signer's declaration.
+  def message(:recorded_time_outside_window, %{attributed: true}) do
     "The time inside the subject's id, recorded by Truestamp and not confirmed in this run, " <>
+      "lies outside the submission window."
+  end
+
+  def message(:recorded_time_outside_window, _assigns) do
+    "The time inside the subject's id, declared by the signer (not attributed to Truestamp), " <>
       "lies outside the submission window."
   end
 

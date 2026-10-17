@@ -237,8 +237,8 @@ defmodule Truestamp.Verify.CLITest do
     end
 
     test "the label internally-consistent exits 7, and verified exits 0" do
-      bytes = Signing.production("item", 0x42)
-      config = [environment: :prod, networks: @test_pins, key_chain: [Signing.public_key(0x42)]]
+      bytes = Signing.production_without_key_event("item")
+      config = [environment: :prod, networks: @test_pins, key_chain: [Signing.public_key()]]
 
       {:ok, offline} = Verify.verify(bytes, Config.internal!(config))
       assert {7, stdout, stderr} = CLI.outcome({:ok, offline}, nil)
@@ -468,7 +468,7 @@ defmodule Truestamp.Verify.CLITest do
 
       assert Enum.find(document(stdout)["rows"], &(&1["code"] == "environment_mismatch"))[
                "message"
-             ] =~ "run again with --environment test and --keyring FILE."
+             ] =~ "run again offline with --environment test and --keyring FILE."
 
       staging = Path.join(tmp(), "staging.proof.json")
 
@@ -486,7 +486,7 @@ defmodule Truestamp.Verify.CLITest do
 
       {3, stdout, _stderr} =
         main([
-          Signing.production("item") |> then(&write(&1)),
+          Signing.production_without_key_event("item") |> then(&write(&1)),
           "--environment",
           "test",
           "--no-keyring"

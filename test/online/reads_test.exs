@@ -36,7 +36,13 @@ defmodule Truestamp.Verify.Online.ReadsTest do
   end
 
   test "a cached answer to a read the spec requires live is refused, and any other is kept" do
-    for kind <- [:stellar_identity, :bitcoin_identity, :stellar_root, :bitcoin_tip] do
+    for kind <- [
+          :stellar_identity,
+          :bitcoin_identity,
+          :stellar_root,
+          :bitcoin_tip,
+          :bitcoin_block_at_height
+        ] do
       assert read(FakeReader.found(%{}, cached: true), kind) == {:unreachable, :cached_live_read}
     end
 

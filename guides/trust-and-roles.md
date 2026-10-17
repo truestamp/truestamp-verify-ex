@@ -45,17 +45,26 @@ The compiled pin, `spec/keyring.production.json`, holds no key yet, so a product
 fails KEY_BINDING under it. Until it holds one, check a production proof online, or with a
 keyring that holds its key.
 
-Every keyring passes the load checks of step 0 before any proof is read, and a keyring
-that fails one makes the run a `configuration_error`. The report's `trust_root` names the
-kind of keyring, where it came from, and the SHA-256 of its bytes.
+Every keyring passes the load checks of step 0 before any proof is read. A keyring you give
+as bytes or a file that fails one makes the run a `configuration_error`; a keyring read
+online that fails one, or that cannot be read, or that its source marks cached, is a failed
+read, so no key binds and KEY_BINDING fails with `keyring_unavailable` (section 8.3). The
+report's `trust_root` names the kind of keyring, where it came from, and the SHA-256 of its
+bytes.
 
 ## The keyring Truestamp publishes
 
 An online run under `:prod` with the default trust reads the keyring that governs it from
 Truestamp, through a `Truestamp.Verify.KeyringSource`. `Truestamp.Verify.Online.defaults/1`
 gives `Truestamp.Verify.KeyringSources.WellKnown`, which reads
-`https://www.truestamp.com/.well-known/keyring.json`. The channel is a contract, so another
-one, a DNS record for instance, is a module that implements `c:Truestamp.Verify.KeyringSource.fetch/1`.
+`https://www.truestamp.com/.well-known/keyring.json`, and only a keyring read from that
+URL attributes a proof to Truestamp (section 10.5): a `:current_keyring` source that reads
+any other location makes the run a `configuration_error`.
+
+A keyring read from anywhere else, another origin's `/.well-known/keyring.json`, a DNS
+record, a file your deployment ships, is a supplied keyring. Give its source as the trust
+`{:keyring_source, source}`, a module that implements `c:Truestamp.Verify.KeyringSource.fetch/1`;
+`Truestamp.Verify.Online.defaults(keyring_origin: url)` does this for another origin.
 
 ## Keyless mode
 
@@ -80,3 +89,8 @@ Truestamp.Verify.verify(proof_bytes, config)
 The internal role has no keyless mode, accepts no supplied keyring, and never falls back to
 the compiled pin. While the key chain is not verified, every run fails closed at
 KEY_BINDING with `keyring_unavailable`.
+
+A key chain is not a keyring a verifier reads, so the load checks of its form do not
+apply, but those of the environment do: no run under `:prod` binds a non-production key
+(section 6.4), so a key chain that holds one of `spec/keys.nonproduction.json`, or VECTOR_KEY
+outside `:test`, makes the run a `configuration_error`.

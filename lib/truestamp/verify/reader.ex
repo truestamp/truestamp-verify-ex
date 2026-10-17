@@ -38,7 +38,10 @@ defmodule Truestamp.Verify.Reader do
   A reader owns its transport: its URLs, timeouts, retries, rate limits, budgets and any
   cache. The engine owns every judgement of section 10.4, the same for every reader: it
   checks each field's class, refuses a cached answer where the spec requires a live read
-  (identity, the Stellar root, the Bitcoin tip, and every not-found answer), keeps one answer
+  (identity, the Stellar root, the Bitcoin tip, and every not-found answer) and to a
+  best-chain Bitcoin block at a height (which section 10.4 allows from a cache only when it
+  was read while the source's tip was at least that height plus BITCOIN_FINALITY, a fact no
+  answer carries), keeps one answer
   per read for the whole run, enforces the run's deadline, and turns a reader that raises,
   throws or exits into an unreachable read. A reader need not, and should not, judge an
   answer against the proof.

@@ -55,7 +55,7 @@ defmodule Truestamp.Verify.Config do
 
   | Option | Value |
   |---|---|
-  | `:key_chain` | required: the 32-octet public keys of the verified key chain, or `:unavailable` while it is not verified |
+  | `:key_chain` | required: the 32-octet public keys of the verified key chain, or `:unavailable` while it is not verified. Under `:prod`, a key of `spec/keys.nonproduction.json` in it, and outside `:test`, VECTOR_KEY, makes the run a `configuration_error` (section 6.4) |
 
   An option that is unknown, given twice, or holds a value its member cannot take is
   refused with `{:error, {:invalid_option, name}}`, or an `ArgumentError` from the `!`

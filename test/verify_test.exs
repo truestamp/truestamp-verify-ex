@@ -11,7 +11,7 @@ defmodule Truestamp.VerifyTest do
   use ExUnit.Case, async: true
 
   alias Truestamp.Verify
-  alias Truestamp.Verify.{Config, Edge, Fault, ReadError, Rejection, Report, Row}
+  alias Truestamp.Verify.{Config, Edge, Fault, Keyring, ReadError, Rejection, Report, Row}
   alias Truestamp.Verify.KeyringSources
   alias Truestamp.Verify.Readers.Replay
   alias Truestamp.Verify.Test.{Cases, FakeReader, Signing, Verification}
@@ -97,15 +97,15 @@ defmodule Truestamp.VerifyTest do
   end
 
   describe "Truestamp's own role (section 8.2)" do
-    defp vector_key, do: Signing.public_key(0x42)
+    defp chain_key, do: Signing.public_key()
 
     defp internal(options) do
       Config.internal!([environment: :prod, networks: @test_pins] ++ options)
     end
 
     test "a verified key chain and an online run give verified, with both edges" do
-      bytes = Signing.production("item", 0x42)
-      config = internal(key_chain: [vector_key()], reader: Replay.new!(@replay))
+      bytes = Signing.production_without_key_event("item")
+      config = internal(key_chain: [chain_key()], reader: Replay.new!(@replay))
       assert {:ok, report} = Verify.verify(bytes, config)
       assert report.label == :verified
       assert report.attribution == "truestamp"
@@ -119,14 +119,14 @@ defmodule Truestamp.VerifyTest do
     end
 
     test "offline, the same run is internally consistent" do
-      bytes = Signing.production("item", 0x42)
+      bytes = Signing.production_without_key_event("item")
 
       assert {:ok, %Report{label: :internally_consistent}} =
-               Verify.verify(bytes, internal(key_chain: [vector_key()]))
+               Verify.verify(bytes, internal(key_chain: [chain_key()]))
     end
 
     test "an unverified key chain fails closed, whatever the key" do
-      bytes = Signing.production("item", 0x42)
+      bytes = Signing.production_without_key_event("item")
       {:ok, report} = Verify.verify(bytes, internal(key_chain: :unavailable))
       assert report.label == :failed
       assert report.code == :keyring_unavailable
@@ -142,6 +142,50 @@ defmodule Truestamp.VerifyTest do
 
       assert report.code == :key_binding_failed
     end
+
+    test "under test, a key chain of VECTOR_KEY verifies a vector, its key event committed" do
+      config =
+        Config.internal!(
+          environment: :test,
+          key_chain: [Keyring.vector_key()],
+          reader: Replay.new!(@replay)
+        )
+
+      assert {:ok, %Report{label: :verified, attribution: "truestamp"} = report} =
+               Verify.verify_file(@item, config)
+
+      assert {:pass, nil} in codes(report, :chain)
+
+      assert Enum.find(report.rows, &(&1.part == "/signing_key_event" and &1.step == :chain)).status ==
+               :pass
+    end
+
+    test "no run under prod binds a non-production key, nor one outside test VECTOR_KEY (6.4)" do
+      nonproduction = hd(Keyring.nonproduction_keys())
+      vector_key = Keyring.vector_key()
+
+      for keys <- [[chain_key(), nonproduction], [vector_key]] do
+        assert {:error, %Rejection{code: :configuration_error, message: message}} =
+                 Verify.verify(
+                   Signing.production_without_key_event("item"),
+                   internal(key_chain: keys)
+                 )
+
+        assert message =~ "fails a load check"
+      end
+
+      assert {:error, %Rejection{code: :configuration_error}} =
+               Verify.verify(
+                 Signing.production_without_key_event("item"),
+                 Config.internal!(environment: :staging, key_chain: [vector_key])
+               )
+
+      assert {:ok, %Report{}} =
+               Verify.verify_file(
+                 @item,
+                 Config.internal!(environment: :test, key_chain: [vector_key])
+               )
+    end
   end
 
   describe "the keyring read online (section 8.3)" do
@@ -149,15 +193,17 @@ defmodule Truestamp.VerifyTest do
       @behaviour Truestamp.Verify.KeyringSource
       @impl true
       def fetch({:bytes, bytes}),
-        do:
-          {:ok, {:bytes, bytes}, "https://example.test/.well-known/keyring.json",
-           FakeReader.meta()}
+        do: {:ok, {:bytes, bytes}, Keyring.truestamp_url(), FakeReader.meta()}
+
+      def fetch({:at, location, bytes}), do: {:ok, {:bytes, bytes}, location, FakeReader.meta()}
+
+      def fetch({:cached, bytes}),
+        do: {:ok, {:bytes, bytes}, Keyring.truestamp_url(), FakeReader.meta(cached: true)}
 
       def fetch(:raise), do: raise("down")
       def fetch(:error), do: {:error, :timeout}
-
-      def fetch(:other),
-        do: {:ok, :nonsense, "https://example.test/keyring.json", FakeReader.meta()}
+      def fetch(:other), do: {:ok, :nonsense, Keyring.truestamp_url(), FakeReader.meta()}
+      def fetch(:no_location), do: {:ok, {:bytes, "{}"}, nil, FakeReader.meta()}
     end
 
     defp online_prod(source) do
@@ -170,28 +216,53 @@ defmodule Truestamp.VerifyTest do
 
     test "the current keyring governs an online run under prod, and binds the key it holds" do
       {:ok, report} =
-        Verify.verify(Signing.production("item"), online_prod({:bytes, Signing.keyring()}))
+        Verify.verify(
+          Signing.production_without_key_event("item"),
+          online_prod({:bytes, Signing.keyring()})
+        )
 
       assert report.trust_root.kind == :current_keyring
-      assert report.trust_root.location == "https://example.test/.well-known/keyring.json"
+      assert report.trust_root.location == "https://www.truestamp.com/.well-known/keyring.json"
       assert report.trust_root.digest =~ ~r/\A[0-9a-f]{64}\z/
       assert report.attribution == "truestamp"
       assert {:pass, nil} in codes(report, :key_binding)
     end
 
     test "a read that fails, for any reason, binds no key" do
-      for source <- [{:bytes, "not json"}, :raise, :error, :other] do
-        {:ok, report} = Verify.verify(Signing.production("item"), online_prod(source))
+      for source <- [
+            {:bytes, "not json"},
+            {:cached, Signing.keyring()},
+            :raise,
+            :error,
+            :other,
+            :no_location
+          ] do
+        {:ok, report} =
+          Verify.verify(Signing.production_without_key_event("item"), online_prod(source))
+
         assert report.code == :keyring_unavailable, inspect(source)
         assert report.trust_root.kind == :current_keyring
       end
+    end
+
+    test "a current keyring read from anywhere but Truestamp's URL is a configuration_error" do
+      source = {:at, "https://keys.example.net/.well-known/keyring.json", Signing.keyring()}
+
+      assert {:error, %Rejection{code: :configuration_error, message: message}} =
+               Verify.verify(Signing.production_without_key_event("item"), online_prod(source))
+
+      assert message =~ "https://keys.example.net/.well-known/keyring.json"
+      assert message =~ "{:keyring_source, source}"
     end
 
     test "a keyring read from another origin is a supplied keyring" do
       options = [
         environment: :test,
         networks: @test_pins,
-        trust: {:keyring_source, {KeyringFromBytes, {:bytes, File.read!(@keyring)}}}
+        trust:
+          {:keyring_source,
+           {KeyringFromBytes,
+            {:at, "https://keys.example.net/.well-known/keyring.json", File.read!(@keyring)}}}
       ]
 
       {:ok, report} = Verify.verify_file(@item, options)

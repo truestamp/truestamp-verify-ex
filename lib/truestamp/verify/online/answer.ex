@@ -23,6 +23,10 @@ defmodule Truestamp.Verify.Online.Answer do
   missing, or in another class, is unusable for the check that reads that field
   (`source_unreachable`), but a contradiction in a field that is present still fails the row
   (section 10.4), so a rule reads every field before it decides.
+
+  `:unix_time` is INT for a field that becomes an edge's instant, Bitcoin's
+  `median_time_past`: Unix seconds that a TIME can write, so the years 0000 to 9999
+  (section 2.4). A later time is in INT but no edge can carry it, so the answer is unusable.
   """
 
   alias Truestamp.Verify.Instant
@@ -39,6 +43,7 @@ defmodule Truestamp.Verify.Online.Answer do
   @typedoc "The class of a field (section 2.4)."
   @type class ::
           :int
+          | :unix_time
           | :boolean
           | :hex64
           | :nisthex
@@ -48,6 +53,9 @@ defmodule Truestamp.Verify.Online.Answer do
           | {:enum, [String.t()]}
 
   @max_integer Constants.max_integer()
+
+  # The last second a TIME can write, 9999-12-31T23:59:59Z.
+  @last_time_second 253_402_300_799
 
   @doc """
   The field `name` of `fields` in `class`: `{:ok, value}` when it is present and in its
@@ -62,6 +70,10 @@ defmodule Truestamp.Verify.Online.Answer do
   end
 
   defp in_class(:int, value) when is_integer(value) and value in 0..@max_integer, do: {:ok, value}
+
+  defp in_class(:unix_time, value) when is_integer(value) and value in 0..@last_time_second,
+    do: {:ok, value}
+
   defp in_class(:boolean, value) when is_boolean(value), do: {:ok, value}
   defp in_class(:hex64, value), do: pattern(value, ~r/\A[0-9a-f]{64}\z/)
   defp in_class(:nisthex, value), do: pattern(value, ~r/\A[0-9A-F]{128}\z/)

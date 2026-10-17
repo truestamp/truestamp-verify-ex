@@ -15,10 +15,11 @@ defmodule Truestamp.Verify do
 
   ## Verifying
 
-      # Offline, in production, against the keys built into this library.
+      # Offline, in production, against the keys built into this library: the label is
+      # :internally_consistent for a sound proof signed by one of them. The compiled pin
+      # holds no key yet, so today a production proof fails KEY_BINDING offline.
       {:ok, report} = Truestamp.Verify.verify(proof_bytes)
       report.label
-      #=> :internally_consistent
 
       # A test vector: its environment, and the keyring of its keys.
       {:ok, report} =

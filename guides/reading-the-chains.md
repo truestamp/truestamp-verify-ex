@@ -106,8 +106,10 @@ Sources are combined per row, not per read, so explorers that lag one another, w
 a block behind or a shorter history, do not count as disagreeing. A row whose sources pass
 and fail, or pass with different instants, is `skip sources_disagree`; a row whose sources
 do not all answer, so the policy cannot be met, is `skip sources_incomplete`. Neither is a
-failure, so a faulty or hostile source can keep a row from passing but can never fail a
-genuine proof. `Truestamp.Verify.Online.Policy` gives the rules in full.
+failure. Under `:all`, a faulty or hostile source beside honest ones can keep a row from
+passing but cannot fail it; under `{:at_least, n}`, it takes n sources failing alike to
+fail a row; and under `:first`, the first conclusive source decides alone, so list the one
+you trust most first. `Truestamp.Verify.Online.Policy` gives the rules in full.
 
 > #### Waiting on the specification {: .warning}
 >
@@ -122,7 +124,11 @@ genuine proof. `Truestamp.Verify.Online.Policy` gives the rules in full.
 its row says so. Each source takes `:receive_timeout` and `:req_options` for its own
 transport. A reader may answer from a cache, and each answer says whether it was cached and
 when it was fetched, but the engine refuses a cached answer to the reads that must be live:
-identity, the Stellar root, the Bitcoin tip, and every not-found answer (section 10.4).
+identity, the Stellar root, the Bitcoin tip, and every not-found answer (section 10.4). It
+refuses a cached best-chain Bitcoin block at a height too: the spec allows one only when it
+was read while the source's tip was at least that height plus BITCOIN_FINALITY, and no
+answer says what the tip was. A Bitcoin time that no TIME can write, past the year 9999, is
+an unusable answer, so its row is `skip source_unreachable`.
 
 ## Replay files
 

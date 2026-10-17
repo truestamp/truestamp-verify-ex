@@ -55,6 +55,16 @@ defmodule Truestamp.Verify.Test.Signing do
   def production(name, seed \\ @seed),
     do: name |> positive() |> Map.delete("environment") |> signed(seed)
 
+  @doc """
+  The sound proof `name`, unmarked and without its `signing_key_event`, signed by the key of
+  `seed`: a production proof that a keyring or key chain holding that key attributes to
+  Truestamp. The key event of every sound proof introduces VECTOR_KEY, which no run under
+  `prod` can bind (section 6.4), so a proof signed by any other key leaves it out.
+  """
+  @spec production_without_key_event(String.t(), byte()) :: binary()
+  def production_without_key_event(name, seed \\ @seed),
+    do: name |> positive() |> Map.drop(["environment", "signing_key_event"]) |> signed(seed)
+
   @doc "A keyring, in canonical form, whose one key is the key of `seed`."
   @spec keyring(byte()) :: binary()
   def keyring(seed \\ @seed) do

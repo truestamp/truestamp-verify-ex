@@ -10,14 +10,24 @@ defmodule Truestamp.Verify.Online.Reads do
   #   never a fault that could drop a step's rows;
   # - an answer marked cached is refused where the spec requires a live read: every
   #   not-found answer, and every found answer of an identity, the Stellar root or the
-  #   Bitcoin tip;
+  #   Bitcoin tip; and every best-chain Bitcoin block at a height, which the spec lets come
+  #   from a cache only when it was read while the source's tip was at least that height
+  #   plus BITCOIN_FINALITY, a fact an answer does not carry;
   # - one answer per read for the whole run (the spec allows it), kept in the run;
   # - a deadline over the whole online run: a read past it is unreachable.
 
   alias Truestamp.Verify.Online.Answer
 
-  # Reads whose answer can change, or that the spec requires live (section 10.4).
-  @always_live [:stellar_identity, :bitcoin_identity, :stellar_root, :bitcoin_tip]
+  # Reads whose answer can change, or that the spec requires live (section 10.4). A cached
+  # block at a height would be allowed by the spec only with the tip it was read under, which
+  # the engine cannot check, so it takes none.
+  @always_live [
+    :stellar_identity,
+    :bitcoin_identity,
+    :stellar_root,
+    :bitcoin_tip,
+    :bitcoin_block_at_height
+  ]
 
   @typedoc "The key of one read in a run's memo."
   @type key :: {term(), String.t() | nil, atom(), map()}

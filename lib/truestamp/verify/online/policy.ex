@@ -33,8 +33,10 @@ defmodule Truestamp.Verify.Online.Policy do
   `:first` takes the first conclusive outcome, and when none is conclusive follows rules 4
   and 5 with n = 1. A source that is unreachable is never counted as disagreeing: with
   three sources, two that conflict and one that times out still disagree. Disagreement is
-  never a failure, so a faulty or hostile source cannot fail a genuine proof; with `:all`
-  it can only keep a row from passing, and the row says why.
+  never a failure. So under `:all`, a faulty or hostile source beside honest ones can only
+  keep a row from passing, and the row says why; under `{:at_least, n}`, it takes n sources
+  failing alike to fail a row; and under `:first`, the first source to give a conclusive
+  outcome decides the row alone, so put the source you trust most first.
 
   With one source every rule gives that source's outcome, exactly as a single source does.
   """

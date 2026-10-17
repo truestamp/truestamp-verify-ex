@@ -6,6 +6,7 @@ defmodule Truestamp.Verify.Sources.NistBeaconTest do
 
   use ExUnit.Case, async: true
 
+  alias Truestamp.Verify.Keyring
   alias Truestamp.Verify.KeyringSources.WellKnown
   alias Truestamp.Verify.Sources.NistBeacon
 
@@ -57,9 +58,10 @@ defmodule Truestamp.Verify.Sources.NistBeaconTest do
 
       {WellKnown, options} = WellKnown.new(@options)
 
-      assert {:ok, {:bytes, ~s({"keys": [], "version": "1.0"})},
-              "https://www.truestamp.com/.well-known/keyring.json", _meta} =
+      assert {:ok, {:bytes, ~s({"keys": [], "version": "1.0"})}, location, _meta} =
                WellKnown.fetch(options)
+
+      assert location == Keyring.truestamp_url()
     end
 
     test "any other answer is a failed read" do

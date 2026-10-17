@@ -6,8 +6,10 @@ if Code.ensure_loaded?(Req) do
     @moduledoc """
     A `Truestamp.Verify.KeyringSource` that reads `/.well-known/keyring.json` over HTTPS from
     an origin: by default `https://www.truestamp.com`, whose keyring governs an external
-    verifier's online run under `prod` (SPEC.md section 8.3), or another origin, as the CLI's
-    `--base-url` names one.
+    verifier's online run under `prod` as its `:current_keyring` (SPEC.md section 8.3), or
+    another origin, as the CLI's `--base-url` names one. A keyring from another origin is a
+    supplied keyring, so its source is given as the trust `{:keyring_source, source}`; given
+    as `:current_keyring`, the run is a `configuration_error`.
 
     It gives the keyring's bytes as read, which the engine loads through the load checks of
     step 0 and whose SHA-256 is the trust root's digest. Any failure, a status other than 200

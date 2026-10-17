@@ -38,8 +38,10 @@ defmodule Truestamp.Verify.CLI.Messages do
   defp purpose("dev"), do: "development"
   defp purpose(_marker), do: "testing"
 
+  # SPEC.md 6.4: a command that works, an offline one, since no public source serves the
+  # regtest chain a dev, staging or test proof commits to.
   defp again(marker),
     do:
-      "To check it against the #{marker} keyring, run again with --environment #{marker} " <>
-        "and --keyring FILE."
+      "To check it against the #{marker} keyring, run again offline with --environment " <>
+        "#{marker} and --keyring FILE."
 end

@@ -45,9 +45,20 @@ defmodule Truestamp.Verify.MessagesTest do
       length: 64,
       hash_type: "md5",
       attributed?: true,
+      attributed: true,
+      location: "https://keys.example.net/.well-known/keyring.json",
       module: nil
     }
   ]
+
+  test "a recorded time is Truestamp's only in a run attributed to Truestamp (11.5)" do
+    assert English.message(:recorded_time_outside_window, %{attributed: true}) =~
+             "recorded by Truestamp and not confirmed in this run"
+
+    message = English.message(:recorded_time_outside_window, %{attributed: false})
+    assert message =~ "declared by the signer (not attributed to Truestamp)"
+    refute message =~ "recorded by Truestamp"
+  end
 
   test "every id renders, with the assigns it names" do
     for id <- English.ids() do
