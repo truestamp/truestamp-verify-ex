@@ -24,7 +24,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
 
-    # Every gate on each leg, as truestamp-merkle-elixir runs its own: the versions pinned in
+    # Every gate on each leg, as truestamp-merkle-ex runs its own: the versions pinned in
     # .tool-versions (Elixir 1.20.1 on OTP 29); Elixir 1.20.1 built for each earlier OTP that
     # Elixir 1.20 supports (28 and 27); and Elixir 1.19.3 on OTP 28.1.1, since mix.exs allows
     # Elixir 1.19 or later and 1.19.3 is the oldest version CI tests. Each pinned Erlang and

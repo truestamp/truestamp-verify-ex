@@ -10,7 +10,7 @@ defmodule Truestamp.Verify.MixProject do
   # The commit of truestamp-verification (SPEC.md, spec/ and vectors/) this library conforms
   # to. `priv/spec/` mirrors that commit's spec/ (scripts/sync_spec.exs), and the tests read
   # its vectors/ through the test-only dependency below.
-  @verification_ref "aecdfffb01eb27e8ad86e0732f496541091025ab"
+  @verification_ref "d21c41587995b5297dfa625ff297290d8f434154"
 
   def project do
     [
@@ -78,7 +78,7 @@ defmodule Truestamp.Verify.MixProject do
       # The Merkle tree and inclusion proofs of RFC 9162 section 2.1. Pinned to a full
       # commit id until the library is published to Hex.
       {:truestamp_merkle,
-       github: "truestamp/truestamp-merkle-elixir",
+       github: "truestamp/truestamp-merkle-ex",
        ref: "0c08983854eb7bd24c7aaebb4664da4e5a28f2c0",
        depth: 1},
       # The HTTP sources (Truestamp.Verify.Sources.*) compile only when the caller depends

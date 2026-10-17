@@ -46,7 +46,7 @@ Mix.install([
 ```
 
 The library needs Elixir 1.19 or later. Its one runtime dependency is
-[truestamp_merkle](https://github.com/truestamp/truestamp-merkle-elixir). Req is optional:
+[truestamp_merkle](https://github.com/truestamp/truestamp-merkle-ex). Req is optional:
 without it, the HTTP sources are not compiled, and everything else works.
 
 ## Guides

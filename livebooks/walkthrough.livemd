@@ -12,7 +12,7 @@ Mix.install([
   {:req, "~> 0.7"},
   {:truestamp_verification,
    github: "truestamp/truestamp-verification",
-   ref: "aecdfffb01eb27e8ad86e0732f496541091025ab",
+   ref: "d21c41587995b5297dfa625ff297290d8f434154",
    app: false,
    compile: false}
 ])
