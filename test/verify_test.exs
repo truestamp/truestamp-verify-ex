@@ -368,6 +368,8 @@ defmodule Truestamp.VerifyTest do
   end
 
   describe "apply_expected_hash/2" do
+    # Two runs of every case, which takes more than a minute on a CI runner under --cover.
+    @tag timeout: 300_000
     test "gives the report a fresh run with that hash gives, on every case" do
       for kase <- Cases.all(), kase["expected"]["label"] do
         options = Cases.options(kase)

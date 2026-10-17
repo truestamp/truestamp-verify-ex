@@ -74,7 +74,10 @@ defmodule Truestamp.Verify.Test.TaskRun do
           {"MIX_BUILD_PATH", nil},
           {"LC_ALL", "C"},
           {"LANG", nil},
-          {"LC_CTYPE", nil}
+          {"LC_CTYPE", nil},
+          # The C locale gives Linux's VM latin1 file names, and a path here is not ASCII:
+          # +fnu reads file names as UTF-8 under any locale, as macOS's VM does.
+          {"ELIXIR_ERL_OPTIONS", "+fnu"}
         ]
       )
 
