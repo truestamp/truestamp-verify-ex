@@ -90,6 +90,15 @@ defmodule Truestamp.Verify.Report do
     }
   end
 
+  @doc """
+  The document as the run parsed it at step 2 (SPEC.md section 10.1): the envelope, a map
+  with the members `proof` and `signature`. It is the document the run verified, so a
+  caller who shows a proof's members can take them from here rather than parse its bytes
+  again.
+  """
+  @spec document(t()) :: map()
+  def document(%__MODULE__{__run__: %Run{document: document}}), do: document
+
   @doc "Whether the label is `:verified`."
   @spec verified?(t()) :: boolean()
   def verified?(%__MODULE__{label: label}), do: label == :verified

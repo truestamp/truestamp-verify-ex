@@ -11,7 +11,8 @@ Truestamp proof specification (SPEC.md, in
 and online, and passes every one of its conformance cases.
 
 **Status:** under construction, and not yet published. The specification it follows is a
-draft.
+draft. Publishing on Hex waits on its dependency truestamp_merkle being published there
+first, since a Hex package can depend only on Hex packages.
 
 A Truestamp proof is one JSON document, signed by Truestamp, that ties a subject to
 Truestamp's chain of blocks and to commitments on public blockchains. Verifying a proof
@@ -43,6 +44,21 @@ Mix.install([{:truestamp_verify, github: "truestamp/truestamp-verify-ex"}])
 The library needs Elixir 1.19 or later. Its one runtime dependency is
 [truestamp_merkle](https://github.com/truestamp/truestamp-merkle-elixir). Req is optional:
 without it, the HTTP sources are not compiled, and everything else works.
+
+## Guides
+
+- [Getting started](guides/getting-started.md): the calls most callers need, and what a
+  report holds.
+- [The walkthrough](guides/walkthrough.livemd): a Livebook that runs the verifier over a
+  test vector and prints every value each step found, offline and then online from a replay
+  file.
+- [Trust roots and roles](guides/trust-and-roles.md): which keyring governs a run, and the
+  labels each can reach.
+- [Reading the chains](guides/reading-the-chains.md): online runs, the bundled HTTP
+  sources, several sources per network, and test networks.
+- [Writing a source or a reader](guides/writing-a-source.md): your own servers, caches or
+  keyring channel.
+- [Conformance](guides/conformance.md): the claim, how the cases run, and moving the pin.
 
 ## Verifying a proof
 

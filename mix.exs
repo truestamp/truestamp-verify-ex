@@ -114,9 +114,96 @@ defmodule Truestamp.Verify.MixProject do
   defp docs do
     [
       main: "readme",
-      extras: ["README.md", "CHANGELOG.md", "LICENSE"],
+      extras: [
+        "README.md",
+        "guides/getting-started.md",
+        "guides/walkthrough.livemd",
+        "guides/trust-and-roles.md",
+        "guides/reading-the-chains.md",
+        "guides/writing-a-source.md",
+        "guides/conformance.md",
+        "CHANGELOG.md",
+        "LICENSE"
+      ],
+      groups_for_extras: [Guides: ~r{guides/}],
       source_ref: "v#{@version}",
-      groups_for_modules: []
+      groups_for_modules: [
+        Verifying: [
+          Truestamp.Verify,
+          Truestamp.Verify.Config,
+          Truestamp.Verify.Report,
+          Truestamp.Verify.Row,
+          Truestamp.Verify.TraceRow,
+          Truestamp.Verify.Edge,
+          Truestamp.Verify.TrustRoot,
+          Truestamp.Verify.Rejection,
+          Truestamp.Verify.ReadError,
+          Truestamp.Verify.Fault,
+          Truestamp.Verify.Run,
+          Truestamp.Verify.Step,
+          Truestamp.Verify.ExitCode
+        ],
+        "Reading the chains": [
+          Truestamp.Verify.Online,
+          Truestamp.Verify.Reader,
+          Truestamp.Verify.Readers.HTTP,
+          Truestamp.Verify.Readers.Replay,
+          Truestamp.Verify.Source,
+          Truestamp.Verify.Sources.Horizon,
+          Truestamp.Verify.Sources.Esplora,
+          Truestamp.Verify.Sources.BitcoinCore,
+          Truestamp.Verify.Sources.NistBeacon,
+          Truestamp.Verify.KeyringSource,
+          Truestamp.Verify.KeyringSources.WellKnown,
+          Truestamp.Verify.KeyringSources.Replay,
+          Truestamp.Verify.Online.Policy,
+          Truestamp.Verify.Online.Answer,
+          Truestamp.Verify.Online.Rule,
+          Truestamp.Verify.Online.Rule.Outcome
+        ],
+        Messages: [
+          Truestamp.Verify.Messages,
+          Truestamp.Verify.Messages.English,
+          Truestamp.Verify.CLI.Messages
+        ],
+        "Command line": [
+          Truestamp.Verify.CLI,
+          Truestamp.Verify.Conformance,
+          Truestamp.Verify.AgentLines
+        ],
+        Chains: [
+          Truestamp.Verify.Chains,
+          Truestamp.Verify.Chains.Member,
+          Truestamp.Verify.Chains.Bitcoin,
+          Truestamp.Verify.Chains.Stellar,
+          Truestamp.Verify.Chains.Nist,
+          Truestamp.Verify.CommitmentChain,
+          Truestamp.Verify.EntropySource
+        ],
+        Steps: ~r/^Truestamp\.Verify\.Steps\./,
+        "Specification data": ~r/^Truestamp\.Verify\.Spec/,
+        Primitives: [
+          Truestamp.Verify.JSON,
+          Truestamp.Verify.JSON.Binary64,
+          Truestamp.Verify.JSON.Pointer,
+          Truestamp.Verify.JCS,
+          Truestamp.Verify.CanonicalForm,
+          Truestamp.Verify.Base64URL,
+          Truestamp.Verify.Ed25519,
+          Truestamp.Verify.KeyId,
+          Truestamp.Verify.Hash,
+          Truestamp.Verify.Instant,
+          Truestamp.Verify.ItemCode,
+          Truestamp.Verify.ReasonCodes,
+          Truestamp.Verify.Keyring,
+          Truestamp.Verify.Schema,
+          Truestamp.Verify.Layout,
+          Truestamp.Verify.Check,
+          Truestamp.Verify.Bitcoin,
+          Truestamp.Verify.Bitcoin.Transaction,
+          Truestamp.Verify.Bitcoin.MerkleBlock
+        ]
+      ]
     ]
   end
 end
