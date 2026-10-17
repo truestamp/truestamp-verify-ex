@@ -32,7 +32,7 @@ defmodule Truestamp.Verify.Conformance do
   """
 
   alias Truestamp.Verify
-  alias Truestamp.Verify.{Fault, Instant, JCS, JSON, ReadError, Rejection, Report}
+  alias Truestamp.Verify.{Fault, Instant, JCS, JSON, ReadError, Rejection, Report, Spec}
   alias Truestamp.Verify.KeyringSources
   alias Truestamp.Verify.Readers.Replay
 
@@ -108,10 +108,12 @@ defmodule Truestamp.Verify.Conformance do
     end
   end
 
-  defp environment(_id, environment) when environment in ~w(prod dev staging test),
-    do: {:ok, String.to_existing_atom(environment)}
-
-  defp environment(id, _environment), do: {:error, "Case #{id}: an invalid environment."}
+  defp environment(id, environment) do
+    case is_binary(environment) && Spec.environment(environment) do
+      atom when is_atom(atom) and atom not in [nil, false] -> {:ok, atom}
+      _no_environment -> {:error, "Case #{id}: an invalid environment."}
+    end
+  end
 
   defp networks(_id, %{"commitment" => commitment, "entropy" => entropy} = networks)
        when map_size(networks) == 2,
@@ -256,6 +258,63 @@ defmodule Truestamp.Verify.Conformance do
       _other ->
         "expected #{inspect(expected)}, got #{inspect(output)}"
     end
+  end
+
+  @usage "Usage: mix truestamp.conformance CASES_JSON [--offline-only]"
+
+  @doc "The usage line of `mix truestamp.conformance`."
+  @spec usage() :: String.t()
+  def usage, do: @usage
+
+  @doc """
+  The entry point of `mix truestamp.conformance CASES_JSON [--offline-only]`:
+  `{exit_code, stdout, stderr}`, writing to neither stream.
+
+  Standard output carries `document/2` of every case of the file, or of its offline cases
+  alone under `--offline-only`, as an offline verifier runs them (section 13.1). The entry
+  point compares nothing. The exit code is 0 when the document is written, whatever the
+  cases give; 1, with nothing on standard output, for an invalid command line or a cases
+  file that cannot be read, is not JSON, or holds a case whose form section 13.2 does not
+  allow; and 2, with nothing on standard output, for a fault inside the entry point.
+  """
+  @spec main([String.t()]) :: {non_neg_integer(), iodata(), iodata()}
+  def main(argv) when is_list(argv) do
+    with {:ok, path, offline_only?} <- arguments(argv),
+         {:ok, cases} <- cases(path),
+         :ok <- forms(cases, Path.dirname(path)) do
+      chosen = if offline_only?, do: Enum.reject(cases, &online?/1), else: cases
+      left_out = length(cases) - length(chosen)
+      summary = "Ran #{length(chosen)} cases of #{path}; left out #{left_out} online cases.\n"
+      {0, document(chosen, Path.dirname(path)), summary}
+    else
+      {:error, message} -> {1, "", [message, "\n", @usage, "\n"]}
+    end
+  catch
+    kind, reason ->
+      banner = Exception.format_banner(kind, reason, __STACKTRACE__)
+      {2, "", ["A fault inside the conformance entry point: ", banner, "\n"]}
+  end
+
+  defp arguments([path]), do: utf8_path(path, false)
+  defp arguments([path, "--offline-only"]), do: utf8_path(path, true)
+  defp arguments(["--offline-only", path]), do: utf8_path(path, true)
+  defp arguments(_argv), do: {:error, "Give exactly one cases file."}
+
+  defp utf8_path(path, offline_only?) do
+    if String.valid?(path),
+      do: {:ok, path, offline_only?},
+      else: {:error, "The path is not valid UTF-8."}
+  end
+
+  # Every case's form and configuration, before any runs: the first that section 13.2 does
+  # not allow refuses the whole file.
+  defp forms(cases, vectors) do
+    Enum.find_value(cases, :ok, fn kase ->
+      case options(kase, vectors) do
+        {:ok, _options} -> nil
+        {:error, message} -> {:error, message}
+      end
+    end)
   end
 
   @doc """

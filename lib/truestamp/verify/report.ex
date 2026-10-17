@@ -27,7 +27,7 @@ defmodule Truestamp.Verify.Report do
   a member or a row of a report.
   """
 
-  alias Truestamp.Verify.{CanonicalForm, Edge, JCS, Row, Run, TraceRow, TrustRoot}
+  alias Truestamp.Verify.{CanonicalForm, Edge, JCS, Row, Run, Spec, TraceRow, TrustRoot}
   alias Truestamp.Verify.Steps.Verdict
 
   @type label :: Verdict.label()
@@ -77,7 +77,7 @@ defmodule Truestamp.Verify.Report do
       label: run.label,
       code: run.code,
       attribution: run.attribution,
-      environment: String.to_existing_atom(run.config.environment),
+      environment: Spec.environment(run.config.environment),
       type: run.type,
       subject_id: run.subject_id,
       rows: run.rows,

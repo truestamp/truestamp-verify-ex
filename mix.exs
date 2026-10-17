@@ -36,10 +36,34 @@ defmodule Truestamp.Verify.MixProject do
       dialyzer: [
         plt_core_path: "_build/plts",
         plt_local_path: "_build/plts",
-        plt_add_apps: [:mix, :req]
+        plt_add_apps: [:mix, :req, :ex_unit]
       ],
-      source_url: @source_url
+      source_url: @source_url,
+      aliases: aliases()
     ]
+  end
+
+  # `mix truestamp.verify`, `mix truestamp.conformance` and `mix truestamp.agent_lines`
+  # compile first with a quiet shell and standard error as the group leader, so a run that
+  # compiles, its dependencies included, writes nothing to standard output, which carries
+  # only the task's JSON document. `Mix.Tasks.Truestamp.Verify` gives the same alias to a
+  # project that depends on this library.
+  defp aliases do
+    for task <- ~w(truestamp.verify truestamp.conformance truestamp.agent_lines),
+        do: {String.to_atom(task), [&quiet_compile/1, task]}
+  end
+
+  defp quiet_compile(_args) do
+    {shell, group_leader} = {Mix.shell(), Process.group_leader()}
+    Mix.shell(Mix.Shell.Quiet)
+    Process.group_leader(self(), Process.whereis(:standard_error))
+
+    try do
+      Mix.Task.run("compile")
+    after
+      Process.group_leader(self(), group_leader)
+      Mix.shell(shell)
+    end
   end
 
   defp elixirc_paths(:test), do: ["lib", "test/support"]

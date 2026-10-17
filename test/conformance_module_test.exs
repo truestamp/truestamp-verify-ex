@@ -149,6 +149,43 @@ defmodule Truestamp.Verify.ConformanceModuleTest do
     end
   end
 
+  describe "main/1" do
+    @cases Verification.path("vectors/cases.json")
+
+    test "writes the document of every case, or of the offline ones under --offline-only" do
+      offline = Enum.reject(Cases.all(), &Conformance.online?/1)
+      expected = Conformance.document(offline, @vectors)
+
+      for argv <- [[@cases, "--offline-only"], ["--offline-only", @cases]] do
+        assert {0, ^expected, summary} = Conformance.main(argv)
+        left_out = length(Cases.all()) - length(offline)
+        assert summary =~ "Ran #{length(offline)} cases of #{@cases}; left out #{left_out} online"
+      end
+    end
+
+    @tag :tmp_dir
+    test "refuses a command line, or a cases file, it cannot use", %{tmp_dir: dir} do
+      File.write!(Path.join(dir, "form.json"), ~s([{"id": "x"}]))
+
+      for argv <- [
+            [],
+            [@cases, @cases],
+            [@cases, "--online-only"],
+            [<<0xFF>>],
+            [Path.join(dir, "none.json")],
+            [Path.join(dir, "form.json")]
+          ] do
+        assert {1, "", stderr} = Conformance.main(argv), inspect(argv)
+        assert IO.iodata_to_binary(stderr) =~ Conformance.usage()
+      end
+    end
+
+    test "a fault inside the entry point exits 2, with nothing on standard output" do
+      assert {2, "", stderr} = Conformance.main([123])
+      assert IO.iodata_to_binary(stderr) =~ "A fault inside the conformance entry point: "
+    end
+  end
+
   test "document/2: one entry per case, in order, each {id, output}" do
     cases = Enum.take(Cases.all(), 3) ++ [Cases.get!("reads-bitcoin-tip_final")]
     document = Conformance.document(cases, @vectors)

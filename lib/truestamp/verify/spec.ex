@@ -84,6 +84,17 @@ defmodule Truestamp.Verify.Spec do
   @spec networks() :: %{String.t() => [String.t()]}
   def networks, do: @networks
 
+  @doc """
+  The atom of the environment named `name`, such as `:prod` for `"prod"`, or nil for a name
+  that is no environment.
+  """
+  @spec environment(String.t()) :: atom() | nil
+  for name <- @environments do
+    def environment(unquote(name)), do: unquote(String.to_atom(name))
+  end
+
+  def environment(_name), do: nil
+
   @doc "The default pins of the environment `environment`: its row of `spec/network-pins.json`."
   @spec default_pins(String.t()) :: %{commitment: pins(), entropy: pins()}
   def default_pins(environment) when environment in @environments,

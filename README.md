@@ -113,6 +113,28 @@ config =
 {:ok, report} = Truestamp.Verify.verify(proof_bytes, config)
 ```
 
+## From the command line
+
+The library brings the command of SPEC.md section 12.2 as a Mix task:
+
+```sh
+mix truestamp.verify proof.json                       # offline, in production
+mix truestamp.verify proof.json --online              # reads the chains; needs Req
+mix truestamp.verify vectors/positive/item.proof.json \
+  --environment test --keyring vectors/keyring.test.json --trace item.trace.json
+```
+
+Standard output carries only the report, one JSON document, and standard error a summary
+for people. The exit code is the label's (0 for `verified`, 3 for `failed`, and so on), 4 or
+8 for a bare rejection, and 1 or 2 when there is no report. `mix help truestamp.verify` gives
+every option. In a project that depends on this library, Mix prints the build of its
+dependencies to standard output before the task runs; the task's docs give a two-function
+alias that keeps standard output to the report alone.
+
+Two more tasks serve truestamp-verification's generator: `mix truestamp.conformance
+CASES_JSON` writes what the verifier gives for each conformance case, and `mix
+truestamp.agent_lines RUNS_JSON` the lines of the agent-sufficiency test.
+
 ## Conformance
 
 This library passes every case of `vectors/cases.json` in truestamp-verification at the
