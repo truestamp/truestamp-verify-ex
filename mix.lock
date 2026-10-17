@@ -23,5 +23,5 @@
   "stream_data": {:hex, :stream_data, "1.4.0", "026f929db613aabea6208012ae9b8970d3fd5f88b3bdf26831bc536f98c42036", [:mix], [], "hexpm", "2b0ee3a340dcce1c8cf6302a763ee757d1e01c54d6e16d9069062509d68b1dc9"},
   "telemetry": {:hex, :telemetry, "1.4.2", "a0cb522801dffb1c49fe6e30561badffc7b6d0e180db1300df759faa22062855", [:rebar3], [], "hexpm", "928f6495066506077862c0d1646609eed891a4326bee3126ba54b60af61febb1"},
   "truestamp_merkle": {:git, "https://github.com/truestamp/truestamp-merkle-elixir.git", "0c08983854eb7bd24c7aaebb4664da4e5a28f2c0", [ref: "0c08983854eb7bd24c7aaebb4664da4e5a28f2c0", depth: 1]},
-  "truestamp_verification": {:git, "https://github.com/truestamp/truestamp-verification.git", "10dcb7df52bb2b51527b0399e5658f431cfb3ae6", [ref: "10dcb7df52bb2b51527b0399e5658f431cfb3ae6"]},
+  "truestamp_verification": {:git, "https://github.com/truestamp/truestamp-verification.git", "aecdfffb01eb27e8ad86e0732f496541091025ab", [ref: "aecdfffb01eb27e8ad86e0732f496541091025ab"]},
 }

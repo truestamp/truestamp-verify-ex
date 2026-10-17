@@ -33,8 +33,14 @@ basis. Messages and `values` are never compared. Each online case reads from its
 file, so the suite never reaches the network.
 
 `mix truestamp.conformance CASES_JSON` prints, for each case, what section 13.1 compares,
-as one JSON document; truestamp-verification's generator runs it to check its own vectors.
-`--offline-only` leaves out the online cases, as an offline verifier does.
+as one JSON document, for anyone who wants to diff another verifier's output against the
+reference's. `--offline-only` leaves out the online cases, as an offline verifier does.
+
+truestamp-verification runs no verifier: it is upstream of every one, and this library holds
+itself to it. CI runs the whole gate on every push against the pinned commit, and
+`.github/workflows/upstream.yml` runs the tests every day, and on demand, against
+truestamp-verification's `main`, so a change there that this library does not yet follow
+shows up within a day.
 
 ## Testing against another checkout
 

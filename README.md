@@ -10,9 +10,7 @@ Truestamp proof specification (SPEC.md, in
 [truestamp-verification](https://github.com/truestamp/truestamp-verification)), offline
 and online, and passes every one of its conformance cases.
 
-**Status:** under construction, and not yet on Hex. The specification it follows is a
-draft. Publishing on Hex waits on its dependency truestamp_merkle being published there
-first, since a Hex package can depend only on Hex packages.
+**Status:** under construction. The specification it follows is a draft.
 
 [![Run in Livebook](https://livebook.dev/badge/v1/blue.svg)](https://livebook.dev/run?url=https%3A%2F%2Fgithub.com%2Ftruestamp%2Ftruestamp-verify-ex%2Fblob%2Fmain%2Flivebooks%2Fwalkthrough.livemd) Walk a real proof through every check, in your own Livebook:
 [`livebooks/walkthrough.livemd`](livebooks/walkthrough.livemd).
@@ -26,7 +24,7 @@ establishes when its data was created, who wrote it, or that any claim in it is 
 
 ## Installing
 
-Until it is on Hex, depend on it from GitHub, pinned to a commit:
+Depend on it from GitHub, pinned to a commit:
 
 ```elixir
 def deps do
@@ -155,9 +153,10 @@ every option. In a project that depends on this library, Mix prints the build of
 dependencies to standard output before the task runs; the task's docs give a two-function
 alias that keeps standard output to the report alone.
 
-Two more tasks serve truestamp-verification's generator: `mix truestamp.conformance
-CASES_JSON` writes what the verifier gives for each conformance case, and `mix
-truestamp.agent_lines RUNS_JSON` the lines of the agent-sufficiency test.
+Two more tasks give what conformance compares: `mix truestamp.conformance CASES_JSON`
+writes what the verifier gives for each conformance case, and `mix truestamp.agent_lines
+RUNS_JSON` the lines of the agent-sufficiency test. This library's tests hold both to the
+files of truestamp-verification, which runs no verifier itself.
 
 ## Conformance
 
@@ -190,6 +189,13 @@ task check
 - unused dependencies;
 - every test, with coverage that fails under 100%;
 - the docs.
+
+CI runs `task check` on a matrix of Erlang/OTP and Elixir versions: the versions
+`.tool-versions` pins (Elixir 1.20 on OTP 29), Elixir 1.20 on OTP 28 and on OTP 27, and
+Elixir 1.19.3 on OTP 28.1.1, the oldest that `mix.exs` allows. A second workflow,
+`.github/workflows/upstream.yml`, runs the tests every day, and on demand, against
+truestamp-verification's `main`, so a change to the specification that this library does
+not yet follow shows up within a day.
 
 No test reaches the network. A guard refuses every request without a stub of its own, and
 it must fire before the suite runs. `task test-live` runs the few tests of the HTTP sources

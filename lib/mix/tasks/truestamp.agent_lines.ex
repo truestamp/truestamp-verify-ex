@@ -12,7 +12,8 @@ defmodule Mix.Tasks.Truestamp.AgentLines do
 
   Standard output carries one JSON document, written with JCS: an array with one entry per
   run, in the file's order, each `{id, lines}`, or `{error, id}`. truestamp-verification's
-  generator runs it as its own process and writes the lines under `agent-test/expected/`.
+  generator derives these lines on its own and writes them under `agent-test/expected/`;
+  this library's tests hold the lines the task gives to those files.
   `Truestamp.Verify.AgentLines` describes the runs file, each line and each exit code.
 
   Like `mix truestamp.verify`, the task compiles the project quietly, so a run that compiles

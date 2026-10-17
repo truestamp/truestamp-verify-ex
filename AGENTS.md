@@ -41,6 +41,11 @@ Read the section of SPEC.md a module's doc cites before changing the module.
   (`deps/truestamp_verification`, or `TRUESTAMP_VERIFICATION`).
 - `priv/spec/` changes only through `elixir scripts/sync_spec.exs` (`task spec-sync`), after
   moving `@verification_ref` in `mix.exs` to the new commit and running `mix deps.get`.
+- truestamp-verification is upstream and runs no verifier: this library holds itself to it.
+  `.github/workflows/upstream.yml` runs the tests every day against its `main`, leaving out
+  those tagged `pinned`, which check the pinned commit itself. When that run fails, follow
+  the change: set `TRUESTAMP_VERIFICATION` to a checkout of `main`, run `task spec-sync` and
+  `task check`, then move `@verification_ref` to that commit.
 - A notebook under `livebooks/` installs the library at a full commit id of this
   repository, and the vectors at `@verification_ref`; `test/walkthrough_test.exs` checks
   both. A commit cannot pin itself, so after a change to the library that a notebook uses,

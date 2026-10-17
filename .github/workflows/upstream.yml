@@ -1,0 +1,78 @@
+# Copyright (c) 2026 Truestamp, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+name: Upstream
+
+# This library holds itself to truestamp-verification, which runs no verifier. CI tests the
+# commit mix.exs pins; this workflow tests truestamp-verification's main, every day and on
+# demand, so a change there that this library does not yet follow shows up within a day.
+# When it fails, follow the change: set TRUESTAMP_VERIFICATION to a checkout of main, run
+# task spec-sync and task check, then move @verification_ref in mix.exs to that commit.
+on:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  upstream:
+    name: Tests against truestamp-verification main
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    env:
+      MISE_ERLANG_COMPILE: "false"
+      LANG: C.UTF-8
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          # The whole history: the walkthrough's test checks that the library commit the
+          # notebook pins is one of this repository's.
+          fetch-depth: 0
+
+      - name: Checkout truestamp-verification main
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: truestamp/truestamp-verification
+          ref: main
+          path: _upstream
+
+      - name: Install Erlang, Elixir and Task via mise
+        uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1
+        with:
+          version: 2026.9.13
+          cache_key_prefix: mise-prebuilt-otp29--
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Restore the dependencies and builds
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: |
+            deps
+            _build
+          key: ${{ runner.os }}-upstream-mix-${{ hashFiles('.tool-versions', 'mix.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-upstream-mix-
+
+      - name: Fetch the dependencies (task setup)
+        run: task setup
+
+      - name: Which commit of truestamp-verification
+        run: git -C _upstream log -1 --format='truestamp-verification %H %s'
+
+      - name: The spec mirror against main
+        # priv/spec/ must be main's spec/, byte for byte: a change under spec/ there needs
+        # task spec-sync here.
+        run: TRUESTAMP_VERIFICATION="$GITHUB_WORKSPACE/_upstream" task spec-check
+
+      - name: Every test against main
+        # The tests that check the pinned commit itself (tag pinned) are left out, since
+        # main is another commit; coverage is CI's, against the pin.
+        run: |
+          TRUESTAMP_VERIFICATION="$GITHUB_WORKSPACE/_upstream" MIX_ENV=test mix compile --force
+          TRUESTAMP_VERIFICATION="$GITHUB_WORKSPACE/_upstream" mix test --warnings-as-errors --exclude pinned

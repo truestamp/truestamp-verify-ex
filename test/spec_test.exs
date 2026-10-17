@@ -31,6 +31,9 @@ defmodule Truestamp.Verify.SpecTest do
       assert files(Path.join(@priv, "spec")) == files(Verification.path("spec"))
     end
 
+    # Pinned: a run against truestamp-verification's main (.github/workflows/upstream.yml)
+    # reads another commit, and leaves this test out.
+    @tag :pinned
     test "names the checkout's commit and manifest digest" do
       assert Spec.source().commit == Verification.commit()
       assert Spec.source().manifest_sha256 == Verification.manifest_sha256()

@@ -12,22 +12,42 @@ on:
 permissions:
   contents: read
 
-# Two jobs, one per tool set, each running every gate (task check): one on the tools
-# .tool-versions pins, and one on Elixir 1.19.3 with OTP 28.1.1, the oldest version mix.exs
-# allows.
-#
 # The tests read the conformance vectors from truestamp-verification, a public repository,
-# through a test-only Mix dependency, so no secret is needed.
+# at the commit mix.exs pins, through a test-only Mix dependency, so no secret is needed.
+# .github/workflows/upstream.yml runs them against its main as well.
 jobs:
-  check:
-    name: task check (.tool-versions)
+  test:
+    # The Elixir 1.19.3 leg names itself, since it shares OTP 28 with a 1.20.1 leg.
+    name: ${{ matrix.name || format('task check (OTP {0})', matrix.otp) }}
     # Pinned: mise finds prebuilt Erlang for Ubuntu 20.04, 22.04 and 24.04, and ubuntu-latest
     # moves to a release it does not map.
     runs-on: ubuntu-24.04
     timeout-minutes: 30
 
+    # Every gate on each leg, as truestamp-merkle-elixir runs its own: the versions pinned in
+    # .tool-versions (Elixir 1.20.1 on OTP 29); Elixir 1.20.1 built for each earlier OTP that
+    # Elixir 1.20 supports (28 and 27); and Elixir 1.19.3 on OTP 28.1.1, since mix.exs allows
+    # Elixir 1.19 or later and 1.19.3 is the oldest version CI tests. Each pinned Erlang and
+    # Elixir is prebuilt on builds.hex.pm for Ubuntu 24.04.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - otp: "29"
+          - otp: "28"
+            erlang: 28.5.0.7
+            elixir: 1.20.1-otp-28
+          - otp: "27"
+            erlang: 27.3.4.18
+            elixir: 1.20.1-otp-27
+          - otp: "28"
+            erlang: 28.1.1
+            elixir: 1.19.3-otp-28
+            name: task check (OTP 28, Elixir 1.19.3)
+
     env:
       # Prebuilt Erlang only (builds.hex.pm): mise fails rather than compile from source.
+      # Elixir always comes prebuilt.
       MISE_ERLANG_COMPILE: "false"
       LANG: C.UTF-8
 
@@ -40,13 +60,40 @@ jobs:
           # notebook pins is one of this repository's.
           fetch-depth: 0
 
+      - name: Use this leg's Erlang and Elixir
+        # mise takes MISE_<TOOL>_VERSION over .tool-versions.
+        if: matrix.erlang
+        run: |
+          echo "MISE_ERLANG_VERSION=${{ matrix.erlang }}" >> "$GITHUB_ENV"
+          echo "MISE_ELIXIR_VERSION=${{ matrix.elixir }}" >> "$GITHUB_ENV"
+
       - name: Install Erlang, Elixir and Task via mise
+        # Versions come from .tool-versions, less any the step above overrides.
         uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1
         with:
           version: 2026.9.13
-          cache_key_prefix: mise-prebuilt
+          # mise-action's cache key does not see the step above, so its prefix names the
+          # leg's versions.
+          cache_key_prefix: mise-prebuilt-otp${{ matrix.otp }}-${{ matrix.erlang }}-${{ matrix.elixir }}
         env:
           GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Check the OTP release
+        # On a pinned leg, the exact Erlang and Elixir too, so the two OTP 28 legs cannot
+        # pass on each other's tools.
+        run: |
+          otp=$(erl -noshell -eval 'io:format("~s", [erlang:system_info(otp_release)]), halt().')
+          root=$(erl -noshell -eval 'io:format("~s", [code:root_dir()]), halt().')
+          erlang=$(cat "$root/releases/$otp/OTP_VERSION")
+          elixir=$(elixir --version | tail -1)
+          echo "Erlang/OTP $erlang; $elixir"
+          test "$otp" = "${{ matrix.otp }}"
+          want_erlang="${{ matrix.erlang }}"
+          want_elixir="${{ matrix.elixir }}"
+          if [ -n "$want_erlang" ]; then
+            test "$erlang" = "$want_erlang"
+            test "$elixir" = "Elixir ${want_elixir%-otp-*} (compiled with Erlang/OTP ${want_elixir##*-otp-})"
+          fi
 
       - name: Restore the dependencies and builds
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
@@ -54,63 +101,20 @@ jobs:
           path: |
             deps
             _build
-          key: ${{ runner.os }}-mix-${{ hashFiles('.tool-versions') }}-${{ hashFiles('mix.lock') }}
+          key: ${{ runner.os }}-otp${{ matrix.otp }}-${{ matrix.erlang }}-${{ matrix.elixir }}-mix-${{ hashFiles('.tool-versions', 'mix.lock') }}
           restore-keys: |
-            ${{ runner.os }}-mix-${{ hashFiles('.tool-versions') }}-
+            ${{ runner.os }}-otp${{ matrix.otp }}-${{ matrix.erlang }}-${{ matrix.elixir }}-mix-
 
       - name: Fetch the dependencies (task setup)
         run: task setup
 
       - name: Check that mix.lock is up to date
+        # task setup's mix deps.get rewrites a lock that no longer matches mix.exs, so a change
+        # here means the commit left the lock stale.
         run: git diff --exit-code -- mix.lock
 
       - name: The gate (task check)
-        run: task check
-
-  test-elixir-1-19:
-    name: task check (Elixir 1.19.3, OTP 28.1.1)
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
-
-    env:
-      MISE_ERLANG_COMPILE: "false"
-      LANG: C.UTF-8
-      # mise takes these over the erlang and elixir lines of .tool-versions; Task still comes
-      # from .tool-versions. Both are prebuilt on builds.hex.pm for Ubuntu 24.04.
-      MISE_ERLANG_VERSION: "28.1.1"
-      MISE_ELIXIR_VERSION: "1.19.3-otp-28"
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          # The whole history: the walkthrough's test checks that the library commit the
-          # notebook pins is one of this repository's.
-          fetch-depth: 0
-
-      - name: Install Erlang, Elixir and Task via mise
-        uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1
-        with:
-          version: 2026.9.13
-          cache_key_prefix: mise-prebuilt-${{ env.MISE_ERLANG_VERSION }}-${{ env.MISE_ELIXIR_VERSION }}
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-
-      - name: Restore the dependencies and builds
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
-        with:
-          path: |
-            deps
-            _build
-          key: ${{ runner.os }}-mix-erlang-${{ env.MISE_ERLANG_VERSION }}-elixir-${{ env.MISE_ELIXIR_VERSION }}-${{ hashFiles('mix.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-mix-erlang-${{ env.MISE_ERLANG_VERSION }}-elixir-${{ env.MISE_ELIXIR_VERSION }}-
-
-      - name: Fetch the dependencies (task setup)
-        run: task setup
-
-      - name: Check that mix.lock is up to date
-        run: git diff --exit-code -- mix.lock
-
-      - name: The gate (task check)
+        # Formatting and house style, the spec mirror, a compile with warnings as errors,
+        # credo, dialyzer (its PLTs are in the cached _build), no unused dependency, every
+        # test with coverage of 100%, and the docs.
         run: task check

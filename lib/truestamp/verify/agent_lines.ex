@@ -11,8 +11,10 @@ defmodule Truestamp.Verify.AgentLines do
   The test asks whether the constructions text alone is enough for a fresh agent to verify a
   proof: the agent writes a `verify.py` that must print, for each proof, every value the
   text defines. This module computes those values with the reference verifier, every line
-  but the two window lines, which truestamp-verification's generator writes from the
-  answers it recorded. The generator writes these lines under `agent-test/expected/`.
+  but the two window lines, which need the answers truestamp-verification's generator
+  recorded. That repository's generator derives every line on its own and writes them under
+  `agent-test/expected/`, and this library's tests hold the lines this module gives to
+  those files.
 
   `RUNS_JSON` is an array of runs, each `{environment, id, keyring, proof}`: `proof` and
   `keyring` are paths relative to the directory that holds `RUNS_JSON`, and `environment` is
