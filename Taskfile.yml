@@ -75,9 +75,11 @@ tasks:
       - mix dialyzer
 
   test:
-    desc: Run the tests, with coverage, which fails under 100%
+    desc: Run the tests, with coverage, which fails under 100% (TEST_COVER=false leaves it out)
     cmds:
-      - mix test --cover --warnings-as-errors {{.CLI_ARGS}}
+      # CI's OTP 27 leg sets TEST_COVER=false: OTP 27's cover cannot recompile some BEAM files
+      # Elixir 1.20 writes, and the other legs measure the same code's coverage.
+      - mix test $([ "${TEST_COVER:-true}" = false ] || echo --cover) --warnings-as-errors {{.CLI_ARGS}}
 
   test-live:
     desc: "Run the tests of the HTTP sources against the real services (network; slow)"

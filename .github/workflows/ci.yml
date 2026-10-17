@@ -40,6 +40,10 @@ jobs:
           - otp: "27"
             erlang: 27.3.4.18
             elixir: 1.20.1-otp-27
+            # OTP 27's cover cannot recompile some BEAM files Elixir 1.20 writes ("variable
+            # unsafe in case"), so this leg runs every test without coverage; the other legs
+            # measure the same code's.
+            test_cover: "false"
           - otp: "28"
             erlang: 28.1.1
             elixir: 1.19.3-otp-28
@@ -117,4 +121,6 @@ jobs:
         # Formatting and house style, the spec mirror, a compile with warnings as errors,
         # credo, dialyzer (its PLTs are in the cached _build), no unused dependency, every
         # test with coverage of 100%, and the docs.
+        env:
+          TEST_COVER: ${{ matrix.test_cover || 'true' }}
         run: task check

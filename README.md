@@ -192,7 +192,9 @@ task check
 
 CI runs `task check` on a matrix of Erlang/OTP and Elixir versions: the versions
 `.tool-versions` pins (Elixir 1.20 on OTP 29), Elixir 1.20 on OTP 28 and on OTP 27, and
-Elixir 1.19.3 on OTP 28.1.1, the oldest that `mix.exs` allows. A second workflow,
+Elixir 1.19.3 on OTP 28.1.1, the oldest that `mix.exs` allows. The OTP 27 leg runs every
+test without coverage, since OTP 27's cover cannot recompile some of the BEAM files Elixir
+1.20 writes; the other legs measure it. A second workflow,
 `.github/workflows/upstream.yml`, runs the tests every day, and on demand, against
 truestamp-verification's `main`, so a change to the specification that this library does
 not yet follow shows up within a day.
