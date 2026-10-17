@@ -111,12 +111,17 @@ passing but cannot fail it; under `{:at_least, n}`, it takes n sources failing a
 fail a row; and under `:first`, the first conclusive source decides alone, so list the one
 you trust most first. `Truestamp.Verify.Online.Policy` gives the rules in full.
 
-> #### Waiting on the specification {: .warning}
->
-> `sources_disagree` and `sources_incomplete` come from a change to SPEC.md that adds
-> several sources per network. Until the commit of truestamp-verification this library
-> pins carries it, a row whose sources disagree, or do not all answer, ends in
-> `internal_error`. A network with one source, which is every default, is not affected.
+Only Stellar and Bitcoin networks take several sources; NIST's Randomness Beacon is one
+(SPEC.md section 9). A policy `{:at_least, n}` takes n from 1 to the number of the
+network's sources. Either mistake makes the run a `configuration_error` at step 0, before
+the proof is read, and so does a source whose identity read shows another network,
+whatever the network's other sources show.
+
+Every CHAIN and SOURCES row of an online run says what it read (section 10.4), in its
+`values`: the network's `policy` and `required`, the n it asks for, and in `outcomes` one
+object for each source the row asked, with that source's status, code, candidate and every
+read made of it. An edge drawn from several sources names each of them in `sources`, and
+the command's summary says which it was read from.
 
 ## Deadlines and caching
 

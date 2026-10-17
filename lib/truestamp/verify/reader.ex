@@ -30,8 +30,12 @@ defmodule Truestamp.Verify.Reader do
 
   A reader names the sources it has for a chain and network with `c:Truestamp.Verify.Reader.sources/3`: one, or
   several under a policy that the engine applies to each row (`Truestamp.Verify.Online.Policy`).
-  `"nist"` has no network, and is asked with network nil. Every source of a Stellar or
-  Bitcoin network has its identity read at step 0 (section 10.2).
+  `"nist"` has no network, and is asked with network nil; NIST's Randomness Beacon is one
+  source (section 9). Every source of a Stellar or Bitcoin network has its identity read at
+  step 0 (section 10.2), and a policy `{:at_least, n}` takes n from 1 to the number of the
+  network's sources; a reader that breaks either rule, or names several NIST sources, makes
+  the run a `configuration_error`. Each source's answers are its own: the engine keeps one
+  answer per read and source, and never lets one source's answer stand as another's.
 
   ## What a reader owns, and what it does not
 

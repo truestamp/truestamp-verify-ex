@@ -47,27 +47,52 @@ defmodule Truestamp.Verify.ConformanceModuleTest do
     end
   end
 
+  # Cases whose `sources` 13.2 does not allow: beside no `online`, or of the wrong form.
+  defp invalid_sources do
+    entry = &%{"stellar" => %{"testnet" => &1}}
+    online = &Map.put(&1, "online", "corpus/replay/window-established.json")
+    base = %{"environment" => "test", "networks" => @networks}
+
+    for {config, online?} <- [
+          {%{"sources" => entry.(%{"policy" => "all", "sources" => ["a"]})}, false},
+          {%{"sources" => []}, true},
+          {%{"sources" => %{"stellar" => []}}, true},
+          {%{"sources" => entry.(%{"policy" => "most", "sources" => ["a"]})}, true},
+          {%{"sources" => entry.(%{"policy" => "all", "sources" => []})}, true},
+          {%{"sources" => entry.(%{"policy" => "all", "sources" => ["a", "a"]})}, true},
+          {%{"sources" => entry.(%{"policy" => "all", "sources" => [~s(a"b)]})}, true},
+          {%{"sources" => entry.(%{"policy" => "all", "sources" => "a"})}, true},
+          {%{
+             "sources" => entry.(%{"policy" => "at_least", "required" => -1, "sources" => ["a"]})
+           }, true}
+        ] do
+      config = Map.merge(base, config)
+      {kase(if(online?, do: online.(config), else: config)), "an invalid sources"}
+    end
+  end
+
   describe "options/2" do
     test "refuses a case whose form or configuration section 13.2 does not allow" do
-      for {kase, why} <- [
-            {%{"id" => "x"}, "Not a case"},
-            {kase(%{"environment" => "test", "networks" => @networks, "extra" => 1}),
-             "which 13.2 does not"},
-            {kase(%{"environment" => "moon", "networks" => @networks}), "invalid environment"},
-            {kase(%{"environment" => "test", "networks" => %{}}), "invalid networks"},
-            {kase(%{"environment" => "test", "networks" => @networks, "keyring" => 7}),
-             "invalid keyring"},
-            {kase(%{
-               "environment" => "test",
-               "networks" => @networks,
-               "keyring" => "unavailable"
-             }), "belongs to an online case"},
-            {kase(%{
-               "environment" => "test",
-               "networks" => @networks,
-               "online" => "corpus/replay/none.json"
-             }), "replay file cannot be read"}
-          ] do
+      for {kase, why} <-
+            [
+              {%{"id" => "x"}, "Not a case"},
+              {kase(%{"environment" => "test", "networks" => @networks, "extra" => 1}),
+               "which 13.2 does not"},
+              {kase(%{"environment" => "moon", "networks" => @networks}), "invalid environment"},
+              {kase(%{"environment" => "test", "networks" => %{}}), "invalid networks"},
+              {kase(%{"environment" => "test", "networks" => @networks, "keyring" => 7}),
+               "invalid keyring"},
+              {kase(%{
+                 "environment" => "test",
+                 "networks" => @networks,
+                 "keyring" => "unavailable"
+               }), "belongs to an online case"},
+              {kase(%{
+                 "environment" => "test",
+                 "networks" => @networks,
+                 "online" => "corpus/replay/none.json"
+               }), "replay file cannot be read"}
+            ] ++ invalid_sources() do
         assert {:error, message} = Conformance.options(kase, @vectors)
         assert message =~ why, inspect(kase)
       end

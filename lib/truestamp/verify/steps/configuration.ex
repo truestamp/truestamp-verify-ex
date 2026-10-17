@@ -26,8 +26,9 @@ defmodule Truestamp.Verify.Steps.Configuration do
   cannot be read (`Truestamp.Verify.ReadError`, exit code 1).
 
   In an online run, every Stellar and Bitcoin network the run pins must have a source, and
-  each source's identity is confirmed, before the file is read; a source on the
-  wrong network is `configuration_error`.
+  each source's identity is confirmed, before the file is read; a source on the wrong
+  network, a policy `{:at_least, n}` whose n is 0 or above the number of its network's
+  sources, and more than one NIST source are each `configuration_error` (section 9).
 
   When the step passes it reports one row, `pass`, with part null.
   """
@@ -186,6 +187,12 @@ defmodule Truestamp.Verify.Steps.Configuration do
 
       {:configuration_error, :identity_forbidden, assigns} ->
         rejected(config, :configuration_identity_forbidden, assigns)
+
+      {:configuration_error, :invalid_policy, assigns} ->
+        rejected(config, :configuration_invalid_policy, assigns)
+
+      {:configuration_error, :nist_sources, assigns} ->
+        rejected(config, :configuration_nist_sources, assigns)
     end
   end
 end

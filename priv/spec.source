@@ -1,5 +1,5 @@
 {
-  "commit": "f6134106fb233972a658c7e9e6eda356a43e9f9b",
+  "commit": "10dcb7df52bb2b51527b0399e5658f431cfb3ae6",
   "files": {
     "spec/constants.json": "16501d3d455ab90d476957b1923d112814c6280279f58311d5e389a4d105ee9a",
     "spec/constructions/c0d70826d7501d5089184d1947bad3dcc33c3172269d425f16fc0025ed07df49.json": "c0d70826d7501d5089184d1947bad3dcc33c3172269d425f16fc0025ed07df49",
@@ -10,11 +10,11 @@
     "spec/network-pins.json": "89cc9ec6777a66d13f6f7cb68277ee29ea8fa0b4590a85e659c31d133d06ea31",
     "spec/networks.json": "b622c188f7d3f02ab0e6ea7a426cdb829b4556ef0048856146f4d2eb83d081ee",
     "spec/prefixes.json": "c519590a1009061a0301f1d71723dbedae6f2fac477284f73df6083c4fd9be5b",
-    "spec/reason-codes.json": "14f93d55108adbe2607554e73545589944f0ad32a0ad49692e9110894ecd0d2f",
+    "spec/reason-codes.json": "d739dfe1a4fc43deea4e6fc6f4ae4a5cf73a885384aafceaba5caa0a7a62a26e",
     "spec/schema.json": "94ddfbf20a04d8a2ca5d23a32bf72112d016407e0ce9fcd8252acebb51902a55",
     "spec/small-order-keys.json": "ffce98a8251ba283a9a5fb1f9e50fd4ae416a740db6a596652068e814c4a8dcc",
     "spec/value-classes.json": "13ad22e3e027b63acf5c3b3f371bfb352eda147e37a091b725d77f575b388de0"
   },
-  "manifest_sha256": "a7afd6307f5c3374e4fbd14dfe84a829ce6e34bd0910c22687c1d29f4918fc91",
+  "manifest_sha256": "aa4f5c46bb89d867aa14380468e20699a5c19d0907b3da67f454f5ce020019ad",
   "repository": "https://github.com/truestamp/truestamp-verification"
 }

@@ -80,12 +80,22 @@ defmodule Truestamp.Verify.Test.FakeReader do
   def sources(%{sources: sources}, chain, network),
     do: Map.get(sources, {chain, network}, {:ok, ["fake"], :first})
 
+  # Each answer of a source named by a string other than "fake" carries that name, as a real
+  # reader's answers name their source.
   @impl true
   def read(%{answers: answers}, source, network, kind, params) do
     case Map.fetch(answers, {source, network, kind, params}) do
       {:ok, answer} when is_function(answer, 0) -> answer.()
-      {:ok, answer} -> answer
+      {:ok, answer} -> named(answer, source)
       :error -> {:error, :not_scripted}
     end
   end
+
+  defp named({:ok, fields, %{source: "fake"} = meta}, source) when is_binary(source),
+    do: {:ok, fields, %{meta | source: source}}
+
+  defp named({:error, :not_found, %{source: "fake"} = meta}, source) when is_binary(source),
+    do: {:error, :not_found, %{meta | source: source}}
+
+  defp named(answer, _source), do: answer
 end

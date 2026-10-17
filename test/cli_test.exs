@@ -553,6 +553,18 @@ defmodule Truestamp.Verify.CLITest do
                  "at 2026-09-26T02:00:00Z)"
 
       assert lines =~ "Submitted after: not established in this run.\n"
+
+      both = %{
+        edge
+        | sources: [
+            %{source: "a", cached: false, fetched_at: fetched_at},
+            %{source: "b", cached: true, fetched_at: fetched_at}
+          ]
+      }
+
+      assert %{report | submitted_before: both} |> CLI.human() |> IO.iodata_to_binary() =~
+               "(stellar_ledger_close_read, read from a in this run; read from b at " <>
+                 "2026-09-26T02:00:00Z)"
     end
   end
 

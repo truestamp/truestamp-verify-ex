@@ -6,6 +6,7 @@ defmodule Truestamp.Verify.Readers.ReplayTest do
 
   use ExUnit.Case, async: true
 
+  alias Truestamp.Verify.JCS
   alias Truestamp.Verify.Readers.Replay
   alias Truestamp.Verify.Test.Verification
 
@@ -26,6 +27,46 @@ defmodule Truestamp.Verify.Readers.ReplayTest do
     end
 
     assert_raise ArgumentError, fn -> Replay.new!(Path.join(dir, "none.json")) end
+  end
+
+  @tag :tmp_dir
+  test "refuses two records of one read and source, and gives each named source its own", %{
+    tmp_dir: dir
+  } do
+    read = %{"kind" => "bitcoin_tip", "network" => "regtest"}
+    found = &%{"outcome" => "found", "value" => %{"height" => &1}}
+    path = Path.join(dir, "r.json")
+
+    File.write!(
+      path,
+      JCS.encode(%{
+        "reads" => [
+          %{"read" => read, "answer" => found.(1)},
+          %{"read" => read, "answer" => found.(2)}
+        ]
+      })
+    )
+
+    assert Replay.new(path) == {:error, :not_a_replay_file}
+
+    records = [
+      %{"read" => read, "answer" => found.(1), "source" => "a"},
+      %{"read" => read, "answer" => found.(2), "source" => "b"},
+      %{"read" => read, "answer" => found.(3)}
+    ]
+
+    File.write!(path, JCS.encode(%{"reads" => records}))
+
+    {:ok, {Replay, state}} =
+      Replay.new(path, sources: %{"bitcoin" => %{"regtest" => {:all, ["a", "b"]}}})
+
+    assert Replay.sources(state, "bitcoin", "regtest") == {:ok, ["a", "b"], :all}
+
+    assert {:ok, %{"height" => 2}, %{source: "b"}} =
+             Replay.read(state, "b", "regtest", :bitcoin_tip, %{})
+
+    assert {:ok, %{"height" => 3}, %{source: "replay"}} =
+             Replay.read(state, "replay", "regtest", :bitcoin_tip, %{})
   end
 
   test "names its one source for the networks whose identity it holds, and NIST" do

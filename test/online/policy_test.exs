@@ -38,7 +38,7 @@ defmodule Truestamp.Verify.Online.PolicyTest do
     by_source = Map.new(sources)
 
     {combined, _used} =
-      Policy.combine(policy, Enum.map(sources, &elem(&1, 0)), &Map.fetch!(by_source, &1), & &1)
+      Policy.combine(policy, Enum.map(sources, &elem(&1, 0)), &Map.fetch!(by_source, &1))
 
     combined
   end
@@ -58,20 +58,19 @@ defmodule Truestamp.Verify.Online.PolicyTest do
       outcomes = %{"a" => skip(), "b" => pass(), "c" => fail()}
 
       {combined, used} =
-        Policy.combine(
-          :first,
-          ["a", "b", "c"],
-          fn s -> send(parent, {:asked, s}) && outcomes[s] end,
-          & &1
-        )
+        Policy.combine(:first, ["a", "b", "c"], fn s ->
+          send(parent, {:asked, s}) && outcomes[s]
+        end)
 
       assert verdict(combined) == {:pass, nil}
       assert Enum.map(used, &elem(&1, 0)) == ["a", "b"]
+      assert [{"a", %Outcome{status: :skip}}, {"b", %Outcome{status: :pass}}] = used
       refute_received {:asked, "c"}
-      assert combined.values["policy"] == "first"
+    end
 
-      assert [%{"source" => "a", "status" => "skip"}, %{"source" => "b", "status" => "pass"}] =
-               combined.values["sources"]
+    test "a candidate rests on the one source whose outcome the row took" do
+      combined = combine(:first, [skip(), pass(edge(100, "y"))])
+      assert [%{source: "y"}] = Edge.sources(combined.candidate)
     end
 
     test "fails on a first conclusive failure" do
@@ -95,12 +94,20 @@ defmodule Truestamp.Verify.Online.PolicyTest do
           pass(edge(100, "y", cached: true, fetched_at: ~U[2026-10-16 12:00:05Z]))
         ])
 
+      # Section 11.5: the edge rests on both, and its own source, cached and fetched_at are
+      # the first's.
       assert verdict(combined) == {:pass, nil}
-      assert combined.candidate.source == "a, b"
-      assert combined.candidate.cached
-      assert combined.candidate.fetched_at == ~U[2026-10-16 12:00:05Z]
-      assert combined.values["candidate"]["source"] == "a, b"
-      assert combined.values["policy"] == "all"
+      assert combined.candidate.source == "x"
+      refute combined.candidate.cached
+      assert combined.candidate.fetched_at == ~U[2026-10-16 12:00:00Z]
+
+      assert Edge.sources(combined.candidate) == [
+               %{source: "x", cached: false, fetched_at: ~U[2026-10-16 12:00:00Z]},
+               %{source: "y", cached: true, fetched_at: ~U[2026-10-16 12:00:05Z]}
+             ]
+
+      assert %{"sources" => [%{"source" => "x"}, %{"source" => "y", "cached" => true}]} =
+               Edge.to_map(combined.candidate)
     end
 
     test "passes with no candidate pass with none" do
@@ -143,7 +150,12 @@ defmodule Truestamp.Verify.Online.PolicyTest do
       assert verdict(combine({:at_least, 2}, [fail(), fail(), skip()])) ==
                {:fail, :chain_mismatch}
 
-      assert combine({:at_least, 2}, [pass(), pass(), skip()]).values["policy"] == "at_least:2"
+      assert verdict(combine({:at_least, 2}, [pass(), pass(), skip()])) == {:pass, nil}
+    end
+
+    test "names each policy, and its n, as a row's values write them" do
+      assert Enum.map([:first, :all, {:at_least, 2}], &Policy.name/1) == ~w(first all at_least)
+      assert Enum.map([:first, :all, {:at_least, 2}], &Policy.required(&1, 3)) == [1, 3, 2]
     end
   end
 

@@ -22,6 +22,7 @@ defmodule Truestamp.Verify.Conformance do
   | `networks` | every pin, in place of the defaults |
   | `expected_hash` | `:expected_hash` |
   | `online` | `:reader` and `:current_keyring` from the replay file |
+  | `sources` | the several sources of the networks it names, each answering from the replay records that name it, under its policy |
 
   **What is compared** (section 13.1): for a bare rejection, `code`, and `sub_reason` when
   the code has one; otherwise the report's `label` and every row as
@@ -35,6 +36,7 @@ defmodule Truestamp.Verify.Conformance do
   alias Truestamp.Verify.{Fault, Instant, JCS, JSON, ReadError, Rejection, Report, Spec}
   alias Truestamp.Verify.KeyringSources
   alias Truestamp.Verify.Readers.Replay
+  alias Truestamp.Verify.Spec.Data
 
   @typedoc "A case of `vectors/cases.json`, as parsed."
   @type kase :: map()
@@ -86,7 +88,8 @@ defmodule Truestamp.Verify.Conformance do
     with :ok <- members(id, config),
          {:ok, environment} <- environment(id, config["environment"]),
          {:ok, networks} <- networks(id, config["networks"]),
-         {:ok, online} <- online(id, config["online"], vectors),
+         {:ok, sources} <- sources(id, config),
+         {:ok, online} <- online(id, config["online"], sources, vectors),
          {:ok, trust} <- trust(id, config["keyring"], vectors, online) do
       options =
         [environment: environment, networks: networks, expected_hash: config["expected_hash"]] ++
@@ -99,7 +102,11 @@ defmodule Truestamp.Verify.Conformance do
   def options(kase, _vectors),
     do: {:error, "Not a case of SPEC.md 13.2: #{kase |> inspect() |> String.slice(0, 200)}"}
 
-  @members ~w(environment expected_hash keyring networks online)
+  @members ~w(environment expected_hash keyring networks online sources)
+
+  # A source's name in a case's `sources` is an ASCII16 (sections 2.4 and 13.2).
+  @external_resource Data.path("encodings.json")
+  @ascii16 "encodings.json" |> Data.read!() |> Map.fetch!("ASCII16") |> Map.fetch!("pattern")
 
   defp members(id, config) do
     case Map.keys(config) -- @members do
@@ -121,10 +128,56 @@ defmodule Truestamp.Verify.Conformance do
 
   defp networks(id, _value), do: {:error, "Case #{id}: an invalid networks."}
 
-  defp online(_id, nil, _vectors), do: {:ok, nil}
+  # A case's `sources`, only beside `online` (section 13.2): the several sources of each
+  # network that has them, as `Truestamp.Verify.Readers.Replay` takes them. A policy's n is
+  # left to the run, whose step 0 refuses one that is 0 or above the number of sources.
+  defp sources(_id, config) when not is_map_key(config, "sources"), do: {:ok, %{}}
 
-  defp online(id, path, vectors) when is_binary(path) do
-    case Replay.new(Path.join(vectors, path)) do
+  defp sources(id, %{"sources" => chains} = config) when is_map(chains) do
+    named =
+      for {chain, networks} <- chains, is_map(networks), into: %{} do
+        {chain, for({network, entry} <- networks, into: %{}, do: {network, policy(entry)})}
+      end
+
+    if Map.has_key?(config, "online") and map_size(named) == map_size(chains) and
+         Enum.all?(named, fn {_chain, networks} ->
+           Enum.all?(networks, &match?({_network, {_policy, _names}}, &1))
+         end),
+       do: {:ok, named},
+       else: invalid_sources(id)
+  end
+
+  defp sources(id, _config), do: invalid_sources(id)
+
+  defp invalid_sources(id), do: {:error, "Case #{id}: an invalid sources."}
+
+  defp policy(%{"policy" => "first", "sources" => names} = entry) when map_size(entry) == 2,
+    do: named(:first, names)
+
+  defp policy(%{"policy" => "all", "sources" => names} = entry) when map_size(entry) == 2,
+    do: named(:all, names)
+
+  defp policy(%{"policy" => "at_least", "required" => n, "sources" => names} = entry)
+       when map_size(entry) == 3 and is_integer(n) and n >= 0,
+       do: named({:at_least, n}, names)
+
+  defp policy(_entry), do: :invalid
+
+  defp named(policy, [_ | _] = names) do
+    ascii16 = Regex.compile!("\\A(?:" <> @ascii16 <> ")\\z")
+
+    if Enum.all?(names, &(is_binary(&1) and Regex.match?(ascii16, &1))) and
+         Enum.uniq(names) == names,
+       do: {policy, names},
+       else: :invalid
+  end
+
+  defp named(_policy, _names), do: :invalid
+
+  defp online(_id, nil, _sources, _vectors), do: {:ok, nil}
+
+  defp online(id, path, sources, vectors) when is_binary(path) do
+    case Replay.new(Path.join(vectors, path), sources: sources) do
       {:ok, reader} ->
         {:ok, reader}
 

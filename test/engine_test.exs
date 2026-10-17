@@ -117,26 +117,67 @@ defmodule Truestamp.Verify.EngineTest do
     end
   end
 
-  test "several sources named by strings are named so in the row's values" do
-    reader =
-      FakeReader.from_replay(@replay,
-        sources: ["a", "b"],
-        source_map: %{
-          {"stellar", "testnet"} => {:ok, ["a", "b"], {:at_least, 2}},
-          {"bitcoin", "regtest"} => {:ok, ["a", "b"], :first},
-          {"nist", nil} => {:ok, ["a", "b"], :all}
-        }
-      )
+  @pins %{
+    commitment: %{"bitcoin" => "regtest", "stellar" => "testnet"},
+    entropy: %{"bitcoin" => "regtest", "stellar" => "testnet"}
+  }
 
-    pins = %{
-      commitment: %{"bitcoin" => "regtest", "stellar" => "testnet"},
-      entropy: %{"bitcoin" => "regtest", "stellar" => "testnet"}
-    }
+  defp sourced(source_map) do
+    reader = FakeReader.from_replay(@replay, sources: ["a", "b"], source_map: source_map)
+    Verify.verify_file(@item, options(reader: reader, networks: @pins))
+  end
 
-    {:ok, %Report{} = report} = Verify.verify_file(@item, options(reader: reader, networks: pins))
-    stellar = Enum.find(report.rows, &(&1.part == "/commitments/stellar"))
-    assert [%{"source" => "a"}, %{"source" => "b"}] = stellar.values["sources"]
+  test "several sources: what each row read, named as the reader names them (10.4)" do
+    {:ok, %Report{} = report} =
+      sourced(%{
+        {"stellar", "testnet"} => {:ok, ["a", "b"], {:at_least, 2}},
+        {"bitcoin", "regtest"} => {:ok, ["a", "b"], :first},
+        {"nist", nil} => {:ok, ["a"], :first}
+      })
+
     assert report.label == :supplied_keyring
+    stellar = Enum.find(report.rows, &(&1.part == "/commitments/stellar"))
+
+    assert %{"policy" => "at_least", "required" => 2, "candidate" => candidate} =
+             stellar.values
+
+    assert %{"basis" => "stellar_ledger_close_read", "instant" => _instant} = candidate
+
+    assert [%{"source" => "a", "status" => "pass"} = a, %{"source" => "b", "status" => "pass"}] =
+             stellar.values["outcomes"]
+
+    refute Map.has_key?(a, "code")
+    assert a["candidate"] == candidate
+
+    assert [%{"read" => %{"kind" => "stellar_transaction", "network" => "testnet"}} | _] =
+             a["reads"]
+
+    assert Enum.all?(a["reads"], &match?(%{"answer" => %{"outcome" => "found"}}, &1))
+
+    # Under :first the row takes the first conclusive source, and asks no other.
+    bitcoin = Enum.find(report.rows, &(&1.part == "/commitments/bitcoin"))
+    assert %{"policy" => "first", "required" => 1} = bitcoin.values
+    assert [%{"source" => "a"}] = bitcoin.values["outcomes"]
+
+    # The edge rests on both Stellar sources, the first giving its own source.
+    assert %{source: "a", sources: [%{source: "a"}, %{source: "b"}]} = report.submitted_before
+  end
+
+  test "a policy's n of 0 or above the sources, or several NIST sources, is configuration_error" do
+    for stellar <- [{:ok, ["a", "b"], {:at_least, 3}}, {:ok, ["a", "b"], {:at_least, 0}}] do
+      assert {:error, %Rejection{code: :configuration_error, message: message}} =
+               sourced(%{{"stellar", "testnet"} => stellar})
+
+      assert message =~ "source policy of the stellar network testnet"
+    end
+
+    assert {:error, %Rejection{code: :configuration_error, message: message}} =
+             sourced(%{{"nist", nil} => {:ok, ["a", "b"], :first}})
+
+    assert message =~ "NIST's Randomness Beacon, which is one source"
+
+    assert {:error, %Rejection{code: :configuration_error}} =
+             sourced(%{{"stellar", "testnet"} => {:ok, ["a"], :most}})
   end
 
   test "a revocation introduces no key, and is not checked (section 10.3)" do

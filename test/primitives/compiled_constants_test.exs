@@ -115,9 +115,9 @@ defmodule Truestamp.Verify.CompiledConstantsTest do
                [:malformed_json, :invalid_envelope]
     end
 
-    test "are the 34 codes of SPEC.md 12.1, in its order" do
+    test "are the 36 codes of SPEC.md 12.1, in its order" do
       text = section("### 12.1 Reason codes", "### 12.2")
-      assert text =~ "34 codes."
+      assert text =~ "36 codes."
 
       codes =
         ~r/^\| `([a-z_]+)` \| ([^|]+) \| ([a-z]+) \|/m
@@ -126,7 +126,7 @@ defmodule Truestamp.Verify.CompiledConstantsTest do
           {String.to_atom(code), String.trim(step), String.to_atom(status)}
         end)
 
-      assert length(codes) == 34
+      assert length(codes) == 36
 
       assert codes ==
                Enum.map(ReasonCodes.table(), &{&1.code, &1.step, &1.status})

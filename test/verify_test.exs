@@ -305,15 +305,18 @@ defmodule Truestamp.VerifyTest do
           source_map: %{
             {"stellar", "testnet"} => {:ok, [:one, {:two, 2}], :all},
             {"bitcoin", "regtest"} => {:ok, [:one, {:two, 2}], :all},
-            {"nist", nil} => {:ok, [:one, {:two, 2}], :all}
+            {"nist", nil} => {:ok, [:one], :first}
           }
         )
 
       {:ok, report} = Verify.verify_file(@item, online(reader))
       assert report.label == :supplied_keyring
-      assert report.submitted_before.source == "one, {:two, 2}"
+      assert length(report.submitted_before.sources) == 2
+      assert length(Report.to_map(report)["submitted_before"]["sources"]) == 2
       stellar = Enum.find(report.rows, &(&1.part == "/commitments/stellar"))
-      assert stellar.values["policy"] == "all"
+      assert %{"policy" => "all", "required" => 2} = stellar.values
+
+      assert Enum.map(stellar.values["outcomes"], & &1["source"]) == ["one", "{:two, 2}"]
     end
 
     test "a reader with no NIST source leaves each NIST row unreachable" do
@@ -342,7 +345,9 @@ defmodule Truestamp.VerifyTest do
         {:ok, report} = Verify.verify_file(@item, online(reader))
         stellar = Enum.find(report.rows, &(&1.part == "/commitments/stellar"))
         assert {stellar.status, stellar.code} == {:skip, :source_unreachable}
-        assert stellar.values == %{"identity" => "unreachable"}
+        assert %{"policy" => "first", "required" => 1, "outcomes" => [outcome]} = stellar.values
+        assert %{"status" => "skip", "code" => "source_unreachable", "reads" => []} = outcome
+        assert [%{"identity" => _why, "source" => "fake"}] = stellar.values["notes"]
       end
     end
 

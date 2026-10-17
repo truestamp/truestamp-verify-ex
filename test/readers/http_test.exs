@@ -85,6 +85,10 @@ defmodule Truestamp.Verify.Readers.HTTPTest do
     end
 
     assert_raise ArgumentError, ~r/not a source/, fn -> HTTP.new(nist: "nist") end
+
+    assert_raise ArgumentError, ~r/one source/, fn ->
+      HTTP.new(nist: {:all, [{NistBeacon, []}, {NistBeacon, [base_url: "https://b.test"]}]})
+    end
   end
 
   test "Online.defaults/1: the reader, the current keyring, and the options given" do

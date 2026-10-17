@@ -19,8 +19,9 @@ if Code.ensure_loaded?(Req) do
 
     Each network takes one source, `{module, options}`, or several under a policy,
     `{policy, [source, ...]}`, where the policy is `:first`, `{:at_least, n}` or `:all`
-    (`Truestamp.Verify.Online.Policy`). A network the reader has no source for makes an online
-    run that pins it a `configuration_error`, as section 10.2, step 0 requires.
+    (`Truestamp.Verify.Online.Policy`); `:nist` takes one source, since NIST's Randomness
+    Beacon is one (section 9). A network the reader has no source for makes an online run
+    that pins it a `configuration_error`, as section 10.2, step 0 requires.
 
     `default/1` gives the compiled-in defaults, the same as the Go CLI's, with any of them
     replaced by the sources given:
@@ -92,6 +93,9 @@ if Code.ensure_loaded?(Req) do
 
     # One network's sources, with ids that name them in a row's values, after checking that
     # each source answers the reads of its chain.
+    defp entry(:nist, {_policy, [_, _ | _]}),
+      do: raise(ArgumentError, "nist: NIST's Randomness Beacon is one source (SPEC.md 9)")
+
     defp entry(chain, {policy, [_ | _] = sources})
          when policy in [:first, :all] or (is_tuple(policy) and elem(policy, 0) == :at_least) do
       valid_policy!(policy, length(sources))

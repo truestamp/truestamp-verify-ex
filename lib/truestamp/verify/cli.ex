@@ -365,13 +365,16 @@ defmodule Truestamp.Verify.CLI do
     ]
   end
 
+  # SPEC.md 11.5: the edge names each source it rests on.
   defp edge_line(caption, %Edge{} = edge, _window, _name) do
-    read =
-      if edge.cached,
-        do: "read from #{edge.source} at #{DateTime.to_iso8601(edge.fetched_at)}",
-        else: "read from #{edge.source} in this run"
+    reads =
+      Enum.map_join(Edge.sources(edge), "; ", fn read ->
+        if read.cached,
+          do: "read from #{read.source} at #{DateTime.to_iso8601(read.fetched_at)}",
+          else: "read from #{read.source} in this run"
+      end)
 
-    "#{caption}: #{Edge.instant_string(edge)} (#{edge.basis}, #{read})\n"
+    "#{caption}: #{Edge.instant_string(edge)} (#{edge.basis}, #{reads})\n"
   end
 
   # SPEC.md 11.2 and 11.3: WINDOW's reasons for an absent edge are empty exactly when the

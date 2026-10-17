@@ -357,17 +357,22 @@ defmodule Truestamp.Verify.WalkthroughTest do
                "#{Verify.Step.name(row.step)} #{row.part}: #{row.status} #{row.code || "-"}"
              end)
 
+    # Every read of every source, in each row's order: its kind, its parameters, its source
+    # and its outcome (section 10.4, what a row read).
     assert Enum.filter(reads, &String.starts_with?(&1, "  read ")) ==
              for(
                row <- read_rows,
-               read <- row.values["reads"] || [],
+               outcome <- row.values["outcomes"] || [],
+               %{"read" => read, "answer" => answer} <- outcome["reads"],
                do:
                  "  read #{read["kind"]}" <>
-                   Enum.map_join(read["params"], fn {name, value} -> " #{name}=#{value}" end) <>
-                   ": #{read["outcome"]}"
+                   (read
+                    |> Map.drop(["kind", "network"])
+                    |> Enum.map_join(fn {name, value} -> " #{name}=#{value}" end)) <>
+                   " from #{outcome["source"]}: #{answer["outcome"]}"
              )
 
-    assert "  read bitcoin_block_at_height height=222: found" in reads
+    assert "  read bitcoin_block_at_height height=222 from replay: found" in reads
 
     for row <- read_rows,
         %{"instant" => instant, "basis" => basis} <- [row.values["candidate"]] do
@@ -380,7 +385,7 @@ defmodule Truestamp.Verify.WalkthroughTest do
       edge = Map.fetch!(report, String.to_existing_atom(name))
       assert edges =~ "#{name}: #{instant}\n  basis       #{basis}\n"
       assert edges =~ "  assumption  #{edge.assumption}\n  part        #{edge.part}\n"
-      assert edges =~ "  source      replay\n"
+      assert edges =~ "  read from   replay in this run\n"
     end
 
     assert String.ends_with?(edges, "window: established")

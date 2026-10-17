@@ -24,6 +24,9 @@ defmodule Truestamp.Verify.Edge do
   does (section 11.5).
   """
 
+  @typedoc "One source an edge rests on, with its read that gave the candidate (section 11.5)."
+  @type source_read :: %{source: String.t(), cached: boolean(), fetched_at: DateTime.t()}
+
   @type t :: %__MODULE__{
           instant: DateTime.t(),
           precision: :second | :millisecond,
@@ -32,11 +35,22 @@ defmodule Truestamp.Verify.Edge do
           part: String.t(),
           source: String.t(),
           cached: boolean(),
-          fetched_at: DateTime.t()
+          fetched_at: DateTime.t(),
+          sources: [source_read()]
         }
 
   @enforce_keys [:instant, :precision, :basis, :assumption, :part, :source, :cached, :fetched_at]
-  defstruct [:instant, :precision, :basis, :assumption, :part, :source, :cached, :fetched_at]
+  defstruct [
+    :instant,
+    :precision,
+    :basis,
+    :assumption,
+    :part,
+    :source,
+    :cached,
+    :fetched_at,
+    sources: []
+  ]
 
   # SPEC.md 11.1 and 11.2: each basis and its stated assumption. Stellar's differs by edge.
   @assumptions %{
@@ -76,7 +90,8 @@ defmodule Truestamp.Verify.Edge do
 
   @doc """
   The edge as a report writes it (section 11.5):
-  `{assumption, basis, cached, fetched_at, instant, part, source}`.
+  `{assumption, basis, cached, fetched_at, instant, part, source, sources}`; `cached`,
+  `fetched_at` and `source` are those of the first of `sources`.
   """
   @spec to_map(t()) :: map()
   def to_map(%__MODULE__{} = edge) do
@@ -87,7 +102,26 @@ defmodule Truestamp.Verify.Edge do
       "fetched_at" => DateTime.to_iso8601(edge.fetched_at),
       "instant" => instant_string(edge),
       "part" => edge.part,
-      "source" => edge.source
+      "source" => edge.source,
+      "sources" =>
+        for read <- sources(edge) do
+          %{
+            "cached" => read.cached,
+            "fetched_at" => DateTime.to_iso8601(read.fetched_at),
+            "source" => read.source
+          }
+        end
     }
   end
+
+  @doc """
+  The sources the edge rests on, in their network's order, each with its read that gave the
+  candidate (section 11.5): those of a row read from several sources, or the edge's own
+  source alone.
+  """
+  @spec sources(t()) :: [source_read()]
+  def sources(%__MODULE__{sources: [_ | _] = sources}), do: sources
+
+  def sources(%__MODULE__{} = edge),
+    do: [%{source: edge.source, cached: edge.cached, fetched_at: edge.fetched_at}]
 end

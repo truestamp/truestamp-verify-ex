@@ -8,6 +8,10 @@ defmodule Truestamp.Verify.Online.Frame do
   #
   # - every Stellar and Bitcoin network the run pins, as a commitment pin or an entropy pin,
   #   must have a source, or the run is `configuration_error`;
+  # - a network's policy `{:at_least, n}` needs n from 1 to the number of its sources, or the
+  #   run is `configuration_error` (section 9);
+  # - NIST's Randomness Beacon is one source (section 9): a reader that names several for it
+  #   makes the run `configuration_error`;
   # - every such source has its identity read, live, and confirmed against its chain's
   #   production value: a source pinned to the production network must give it, and a
   #   source pinned to any other network must not, or the run is `configuration_error`;
@@ -17,14 +21,17 @@ defmodule Truestamp.Verify.Online.Frame do
   #   NIST row `skip source_unreachable`.
   #
   # The frame maps each `{chain, network}` (`{"nist", nil}` for NIST) to its policy and its
-  # sources, each with the outcome of its identity read.
+  # sources, each with the outcome of its identity read and that read's meta, which a row
+  # whose source was asked nothing else reports (section 10.4, what a row read).
 
   alias Truestamp.Verify.{Chains, Config}
   alias Truestamp.Verify.Online.Reads
 
   @type entry :: %{
           policy: term(),
-          sources: [%{id: term(), identity: :ok | {:unreachable, term()}}]
+          sources: [
+            %{id: term(), identity: :ok | {:unreachable, term()}, identity_meta: map() | nil}
+          ]
         }
   @type t :: %{{String.t(), String.t() | nil} => entry() | :none}
 
@@ -35,8 +42,9 @@ defmodule Truestamp.Verify.Online.Frame do
 
   def build(%Config{reader: reader, networks: pins}, deadline) do
     with {:ok, frame} <- networks(reader, pins),
+         {:ok, nist} <- nist(reader),
          {:ok, frame} <- identities(reader, frame, deadline) do
-      {:ok, Map.put(frame, {"nist", nil}, nist(reader))}
+      {:ok, Map.put(frame, {"nist", nil}, nist)}
     end
   end
 
@@ -51,16 +59,27 @@ defmodule Truestamp.Verify.Online.Frame do
           do: {chain.name(), network}
 
     Enum.reduce_while(pinned, {:ok, %{}}, fn {chain, network} = key, {:ok, frame} ->
-      case safe_sources(module, state, chain, network) do
-        {:ok, [_ | _] = ids, policy} ->
-          sources = Enum.map(ids, &%{id: &1, identity: :ok})
-          {:cont, {:ok, Map.put(frame, key, %{policy: policy, sources: sources})}}
-
-        _none ->
-          {:halt, {:configuration_error, :no_source, %{chain: chain, network: network}}}
+      case entry(safe_sources(module, state, chain, network), chain, network) do
+        {:ok, entry} -> {:cont, {:ok, Map.put(frame, key, entry)}}
+        error -> {:halt, error}
       end
     end)
   end
+
+  # A pinned network's frame entry, from what its reader names: its sources under a policy
+  # section 9 allows for their number.
+  defp entry({:ok, [_ | _] = ids, policy}, chain, network) do
+    if policy?(policy, length(ids)),
+      do: {:ok, %{policy: policy, sources: Enum.map(ids, &unconfirmed/1)}},
+      else:
+        {:configuration_error, :invalid_policy,
+         %{chain: chain, network: network, count: length(ids)}}
+  end
+
+  defp entry(_none, chain, network),
+    do: {:configuration_error, :no_source, %{chain: chain, network: network}}
+
+  defp unconfirmed(id), do: %{id: id, identity: :ok, identity_meta: nil}
 
   # One identity read for each source of each pinned network, checked against that network.
   # A reader scopes its source ids to a chain and network, so two networks' sources are two
@@ -85,7 +104,7 @@ defmodule Truestamp.Verify.Online.Frame do
     judged =
       for source <- entry.sources do
         answer = identity(reader, source.id, network, kind, deadline)
-        {source, judge(module, answer, network == production)}
+        {%{source | identity_meta: meta(answer)}, judge(module, answer, network == production)}
       end
 
     if Enum.any?(judged, &match?({_source, :forbidden}, &1)),
@@ -101,6 +120,15 @@ defmodule Truestamp.Verify.Online.Frame do
   defp identity({module, state}, source, network, kind, deadline),
     do: Reads.read({module, state}, source, network, kind, %{}, deadline)
 
+  defp meta({:found, _fields, meta}), do: meta
+  defp meta({:not_found, meta}), do: meta
+  defp meta({:unreachable, _reason}), do: nil
+
+  # Section 9: `{:at_least, n}` with n from 1 to the number of the network's sources.
+  defp policy?(policy, _count) when policy in [:first, :all], do: true
+  defp policy?({:at_least, n}, count) when is_integer(n), do: n in 1..count//1
+  defp policy?(_policy, _count), do: false
+
   # A forbidden identity is configuration_error; one that gives no usable answer leaves the
   # source unreachable.
   defp judge(module, {:found, fields, _meta}, production?) do
@@ -114,13 +142,17 @@ defmodule Truestamp.Verify.Online.Frame do
   defp judge(_module, {:not_found, _meta}, _production?), do: {:unreachable, :identity_not_found}
   defp judge(_module, {:unreachable, reason}, _production?), do: {:unreachable, reason}
 
+  # NIST has no network and no identity read, and is one source (section 9).
   defp nist({module, state}) do
     case safe_sources(module, state, "nist", nil) do
-      {:ok, [_ | _] = ids, policy} ->
-        %{policy: policy, sources: Enum.map(ids, &%{id: &1, identity: :ok})}
+      {:ok, [id], _policy} ->
+        {:ok, %{policy: :first, sources: [unconfirmed(id)]}}
+
+      {:ok, [_, _ | _], _policy} ->
+        {:configuration_error, :nist_sources, %{}}
 
       _none ->
-        :none
+        {:ok, :none}
     end
   end
 

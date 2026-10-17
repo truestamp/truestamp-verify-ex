@@ -46,6 +46,7 @@ defmodule Truestamp.Verify.MessagesTest do
       hash_type: "md5",
       attributed?: true,
       attributed: true,
+      count: 2,
       location: "https://keys.example.net/.well-known/keyring.json",
       module: nil
     }

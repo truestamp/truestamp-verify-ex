@@ -680,9 +680,13 @@ proof, under the configuration of the cells above, with the answers of
 `fetched_at` is the time of this run; the answers are the file's.
 
 For each CHAIN and SOURCES row, the cell prints the reads the row made, each with its kind,
-its parameters and its outcome, `found`, `not_found` or `unreachable`, and the candidate the
-row gives. Then it prints each edge: its instant, its basis, the stated assumption the edge
-rests on (sections 11.1 and 11.2), the part and the source it came from.
+its parameters, the source it was made of and its outcome, `found`, `not_found` or
+`unreachable`, and the candidate the row gives. A row's `values` hold these reads by
+source, under its source policy (section 10.4, what a row read): this case has one source
+for each network, `replay`, and the conformance cases `sources-*` give a network several.
+Then it prints each edge: its instant, its basis, the stated assumption the edge rests on
+(sections 11.1 and 11.2), its part, and each source it rests on, read in this run or at
+the time a cache fetched it (section 11.5).
 
 The label is `supplied-keyring`: the window is established, but the run is attributed to
 the keyring this notebook supplied, not to Truestamp. Only a run attributed to Truestamp,
@@ -707,10 +711,15 @@ print_reads = fn report ->
     code = value_text.(row.code || "-")
     IO.puts("#{step_name.(row.step)} #{value_text.(row.part)}: #{row.status} #{code}")
 
-    Enum.each(row.values["reads"] || [], fn read ->
-      params = Enum.map_join(read["params"], fn {name, value} -> " #{name}=#{value}" end)
-      IO.puts("  read #{read["kind"]}#{params}: #{read["outcome"]}")
-    end)
+    for outcome <- row.values["outcomes"] || [],
+        %{"read" => read, "answer" => answer} <- outcome["reads"] do
+      params =
+        read
+        |> Map.drop(["kind", "network"])
+        |> Enum.map_join(fn {name, value} -> " #{name}=#{value}" end)
+
+      IO.puts("  read #{read["kind"]}#{params} from #{outcome["source"]}: #{answer["outcome"]}")
+    end
 
     with %{"instant" => instant, "basis" => basis} <- row.values["candidate"] do
       IO.puts("  candidate #{instant} (#{basis})")
@@ -729,7 +738,15 @@ print_edges = fn report ->
         IO.puts("  basis       #{edge.basis}")
         IO.puts("  assumption  #{edge.assumption}")
         IO.puts("  part        #{edge.part}")
-        IO.puts("  source      #{edge.source}")
+
+        for read <- Truestamp.Verify.Edge.sources(edge) do
+          read_when =
+            if read.cached,
+              do: "at #{DateTime.to_iso8601(read.fetched_at)}",
+              else: "in this run"
+
+          IO.puts("  read from   #{read.source} #{read_when}")
+        end
     end
   end)
 

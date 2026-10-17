@@ -15,7 +15,8 @@ defmodule Truestamp.Verify.Messages.English do
 
   @ids ~w(configuration_pass configuration_no_keyring configuration_keyring_refused
           configuration_no_source configuration_identity_forbidden
-          configuration_current_keyring_location read_pass input_too_large
+          configuration_current_keyring_location configuration_invalid_policy
+          configuration_nist_sources read_pass input_too_large
           parse_pass malformed_json envelope_pass invalid_envelope environment_pass
           environment_mismatch_unmarked environment_mismatch_marked_under_prod
           environment_mismatch_marked environment_mismatch_unknown_marker keyless
@@ -62,6 +63,15 @@ defmodule Truestamp.Verify.Messages.English do
       "another origin is a supplied keyring: give its source as the trust " <>
       "{:keyring_source, source}."
   end
+
+  def message(:configuration_invalid_policy, %{chain: chain, network: network, count: count}) do
+    "The source policy of the #{chain} network #{network} asks for a number of sources " <>
+      "that is 0 or more than its #{count}; at_least n takes n from 1 to the number of " <>
+      "the network's sources."
+  end
+
+  def message(:configuration_nist_sources, _assigns),
+    do: "This run names several sources for NIST's Randomness Beacon, which is one source."
 
   def message(:configuration_no_source, %{chain: chain, network: network}),
     do: "This online run pins the #{chain} network #{network}, and has no source for it."

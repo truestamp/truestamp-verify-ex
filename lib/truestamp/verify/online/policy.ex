@@ -48,22 +48,27 @@ defmodule Truestamp.Verify.Online.Policy do
 
   @doc """
   The row's outcome for `sources` under `policy`, where `evaluate` gives one source's
-  outcome; with the per-source outcomes it used, in order.
+  outcome; with the outcomes of the sources it asked, in order. Under `:first`, a source
+  after the one whose outcome the row took is not asked (section 10.4).
+
+  A passing row's candidate is the one its counted sources share, and it rests on each of
+  them: its `sources` names every source that passed under `{:at_least, n}` or `:all`, and
+  the one source the row took under `:first` (section 11.5). The row's `values` are the
+  caller's to write.
   """
-  @spec combine(policy(), [term(), ...], (term() -> Outcome.t()), (term() -> String.t())) ::
+  @spec combine(policy(), [term(), ...], (term() -> Outcome.t())) ::
           {Outcome.t(), [{term(), Outcome.t()}]}
-  def combine(policy, sources, evaluate, describe)
+  def combine(policy, sources, evaluate)
 
   # One source, under a policy one source can satisfy: exactly that source's outcome, as with
   # a single source and no policy at all. `{:at_least, n}` with fewer than n sources can
   # never pass, and falls to the rules below.
-  def combine(policy, [source], evaluate, _describe)
-      when policy in [:first, :all, {:at_least, 1}] do
+  def combine(policy, [source], evaluate) when policy in [:first, :all, {:at_least, 1}] do
     outcome = evaluate.(source)
     {outcome, [{source, outcome}]}
   end
 
-  def combine(:first, sources, evaluate, describe) do
+  def combine(:first, sources, evaluate) do
     outcomes =
       Enum.reduce_while(sources, [], fn source, acc ->
         outcome = evaluate.(source)
@@ -78,37 +83,47 @@ defmodule Truestamp.Verify.Online.Policy do
         nil -> inconclusive(outcomes)
       end
 
-    {wrap(combined, :first, outcomes, describe), outcomes}
+    {combined, outcomes}
   end
 
-  def combine(policy, sources, evaluate, describe) do
+  def combine(policy, sources, evaluate) do
     outcomes = Enum.map(sources, &{&1, evaluate.(&1)})
-    n = needed(policy, length(sources))
-    passes = for {source, %Outcome{status: :pass} = outcome} <- outcomes, do: {source, outcome}
+    n = required(policy, length(sources))
+    passes = for {_source, %Outcome{status: :pass} = outcome} <- outcomes, do: outcome
     fails = for {_source, %Outcome{status: :fail} = outcome} <- outcomes, do: outcome
 
     combined =
       cond do
         disagree?(passes, fails) -> %Outcome{status: :skip, code: :sources_disagree, values: %{}}
-        length(passes) >= n -> agreed(passes, describe)
+        length(passes) >= n -> agreed(passes)
         length(fails) >= n -> hd(fails)
         true -> inconclusive(outcomes)
       end
 
-    {wrap(combined, policy, outcomes, describe), outcomes}
+    {combined, outcomes}
   end
 
-  defp needed(:all, count), do: count
-  defp needed({:at_least, n}, _count), do: n
+  @doc """
+  The n of `policy` for a network of `count` sources, the number of conclusive outcomes it
+  asks for: 1 under `:first`, and `count` under `:all`.
+  """
+  @spec required(policy(), pos_integer()) :: non_neg_integer()
+  def required(:first, _count), do: 1
+  def required(:all, count), do: count
+  def required({:at_least, n}, _count), do: n
+
+  @doc "The policy as a row's `values` name it: `first`, `at_least` or `all`."
+  @spec name(policy()) :: String.t()
+  def name(:first), do: "first"
+  def name(:all), do: "all"
+  def name({:at_least, _n}), do: "at_least"
 
   defp conclusive?(%Outcome{status: status}), do: status in [:pass, :fail]
 
   defp disagree?(passes, fails) do
     instants =
       passes
-      |> Enum.map(fn {_source, outcome} ->
-        outcome.candidate && Edge.milliseconds(outcome.candidate)
-      end)
+      |> Enum.map(&(&1.candidate && Edge.milliseconds(&1.candidate)))
       |> Enum.uniq()
 
     (passes != [] and fails != []) or length(instants) > 1
@@ -125,52 +140,13 @@ defmodule Truestamp.Verify.Online.Policy do
     end
   end
 
-  # Rule 2: the passes agree on their candidate; the edge records every source it rests on.
-  defp agreed([{_source, first} | _rest] = passes, describe) do
+  # Rule 2: the passes agree on their candidate, which rests on every one of them, the first
+  # giving the edge's own source, cached and fetched_at (section 11.5).
+  defp agreed([first | _rest] = passes) do
     candidate =
-      case first.candidate do
-        nil ->
-          nil
-
-        %Edge{} = edge ->
-          candidates = Enum.map(passes, fn {_source, outcome} -> outcome.candidate end)
-
-          %{
-            edge
-            | source: Enum.map_join(passes, ", ", fn {source, _outcome} -> describe.(source) end),
-              cached: Enum.any?(candidates, & &1.cached),
-              fetched_at: candidates |> Enum.map(& &1.fetched_at) |> Enum.max(DateTime)
-          }
-      end
+      first.candidate &&
+        %{first.candidate | sources: Enum.flat_map(passes, &Edge.sources(&1.candidate))}
 
     %Outcome{status: :pass, code: nil, values: %{}, candidate: candidate}
   end
-
-  defp wrap(combined, policy, outcomes, describe) do
-    sources =
-      for {source, outcome} <- outcomes do
-        %{
-          "code" => outcome.code && Atom.to_string(outcome.code),
-          "source" => describe.(source),
-          "status" => Atom.to_string(outcome.status),
-          "values" => outcome.values
-        }
-      end
-
-    values = %{"policy" => name(policy), "sources" => sources}
-
-    values =
-      if combined.candidate,
-        do: Map.put(values, "candidate", Edge.to_map(combined.candidate)),
-        else: values
-
-    # Each source's answers stay with its own outcome, where the engine keeps them by source.
-    %{combined | values: values, answers: []}
-  end
-
-  @doc "The policy as a row's `values` write it: `first`, `all`, or `at_least:<n>`."
-  @spec name(policy()) :: String.t()
-  def name(:first), do: "first"
-  def name(:all), do: "all"
-  def name({:at_least, n}), do: "at_least:#{n}"
 end
