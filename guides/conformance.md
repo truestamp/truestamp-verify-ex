@@ -38,9 +38,9 @@ reference's. `--offline-only` leaves out the online cases, as an offline verifie
 
 truestamp-verification runs no verifier: it is upstream of every one, and this library holds
 itself to it. CI runs the whole gate on every push against the pinned commit, and
-`.github/workflows/upstream.yml` runs the tests every day, and on demand, against
-truestamp-verification's `main`, so a change there that this library does not yet follow
-shows up within a day.
+`.github/workflows/upstream.yml` runs the tests every week, and on demand, against the tip
+of truestamp-verification's `main`, so a change there that this library does not yet follow
+shows up within a week.
 
 ## Testing against another checkout
 

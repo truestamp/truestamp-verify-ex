@@ -4,13 +4,15 @@
 name: Upstream
 
 # This library holds itself to truestamp-verification, which runs no verifier. CI tests the
-# commit mix.exs pins; this workflow tests truestamp-verification's main, every day and on
-# demand, so a change there that this library does not yet follow shows up within a day.
+# commit mix.exs pins; this workflow tests the tip of truestamp-verification's main, every
+# week and on demand, so a change there that this library does not yet follow shows up within
+# a week.
 # When it fails, follow the change: set TRUESTAMP_VERIFICATION to a checkout of main, run
 # task spec-sync and task check, then move @verification_ref in mix.exs to that commit.
 on:
   schedule:
-    - cron: "17 6 * * *"
+    # Mondays, 06:17 UTC.
+    - cron: "17 6 * * 1"
   workflow_dispatch:
 
 permissions:
