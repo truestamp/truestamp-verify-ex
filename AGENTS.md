@@ -24,6 +24,7 @@ Read the section of SPEC.md a module's doc cites before changing the module.
 | `lib/truestamp/verify/readers/`, `keyring_sources/`, `sources/` | the readers and keyring sources this library ships |
 | `lib/truestamp/verify/{json,jcs,ed25519,...}.ex` | the building blocks: the strict reader, JCS, strict Ed25519, base64url, hashes, the Bitcoin parsers, the schema checker |
 | `priv/spec/` | a byte-for-byte mirror of truestamp-verification's `spec/`; never edit it by hand |
+| `livebooks/` | Livebook notebooks, each installing the library at a pinned commit; `walkthrough.livemd` walks a proof through every check, and the README's **Run in Livebook** button opens it |
 | `test/` | the tests; `test/conformance_test.exs` runs every case of `vectors/cases.json` |
 
 ## Rules
@@ -40,6 +41,11 @@ Read the section of SPEC.md a module's doc cites before changing the module.
   (`deps/truestamp_verification`, or `TRUESTAMP_VERIFICATION`).
 - `priv/spec/` changes only through `elixir scripts/sync_spec.exs` (`task spec-sync`), after
   moving `@verification_ref` in `mix.exs` to the new commit and running `mix deps.get`.
+- A notebook under `livebooks/` installs the library at a full commit id of this
+  repository, and the vectors at `@verification_ref`; `test/walkthrough_test.exs` checks
+  both. A commit cannot pin itself, so after a change to the library that a notebook uses,
+  push it, then move the notebook's `ref` to that commit in a commit of its own. When
+  `@verification_ref` moves, move the notebook's vectors `ref` with it.
 - The engine never reads a value from a document to choose what runs: `type` selects the
   composition of checks, and nothing else does (SPEC.md section 10.6).
 - A reader owns its transport and the engine owns every judgement of SPEC.md section 10.4.

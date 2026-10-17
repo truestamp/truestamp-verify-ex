@@ -10,9 +10,12 @@ Truestamp proof specification (SPEC.md, in
 [truestamp-verification](https://github.com/truestamp/truestamp-verification)), offline
 and online, and passes every one of its conformance cases.
 
-**Status:** under construction, and not yet published. The specification it follows is a
+**Status:** under construction, and not yet on Hex. The specification it follows is a
 draft. Publishing on Hex waits on its dependency truestamp_merkle being published there
 first, since a Hex package can depend only on Hex packages.
+
+[![Run in Livebook](https://livebook.dev/badge/v1/blue.svg)](https://livebook.dev/run?url=https%3A%2F%2Fgithub.com%2Ftruestamp%2Ftruestamp-verify-ex%2Fblob%2Fmain%2Flivebooks%2Fwalkthrough.livemd) Walk a real proof through every check, in your own Livebook:
+[`livebooks/walkthrough.livemd`](livebooks/walkthrough.livemd).
 
 A Truestamp proof is one JSON document, signed by Truestamp, that ties a subject to
 Truestamp's chain of blocks and to commitments on public blockchains. Verifying a proof
@@ -23,22 +26,25 @@ establishes when its data was created, who wrote it, or that any claim in it is 
 
 ## Installing
 
-While the repository is private, depend on it from GitHub:
+Until it is on Hex, depend on it from GitHub, pinned to a commit:
 
 ```elixir
 def deps do
   [
-    {:truestamp_verify, github: "truestamp/truestamp-verify-ex"},
+    {:truestamp_verify, github: "truestamp/truestamp-verify-ex", ref: "<commit id>"},
     # Only for online verification through the bundled HTTP sources:
     {:req, "~> 0.7"}
   ]
 end
 ```
 
-In a Livebook:
+In a Livebook, as `livebooks/walkthrough.livemd` does:
 
 ```elixir
-Mix.install([{:truestamp_verify, github: "truestamp/truestamp-verify-ex"}])
+Mix.install([
+  {:truestamp_verify, github: "truestamp/truestamp-verify-ex", ref: "<commit id>"},
+  {:req, "~> 0.7"}
+])
 ```
 
 The library needs Elixir 1.19 or later. Its one runtime dependency is
@@ -49,9 +55,10 @@ without it, the HTTP sources are not compiled, and everything else works.
 
 - [Getting started](guides/getting-started.md): the calls most callers need, and what a
   report holds.
-- [The walkthrough](guides/walkthrough.livemd): a Livebook that runs the verifier over a
+- [The walkthrough](livebooks/walkthrough.livemd): a Livebook that runs the verifier over a
   test vector and prints every value each step found, offline and then online from a replay
-  file.
+  file. It installs the library and the vectors, each pinned to a commit, so the **Run in
+  Livebook** button above opens it in your own Livebook with nothing else to set up.
 - [Trust roots and roles](guides/trust-and-roles.md): which keyring governs a run, and the
   labels each can reach.
 - [Reading the chains](guides/reading-the-chains.md): online runs, the bundled HTTP

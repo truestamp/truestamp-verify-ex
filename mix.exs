@@ -117,7 +117,7 @@ defmodule Truestamp.Verify.MixProject do
       extras: [
         "README.md",
         "guides/getting-started.md",
-        "guides/walkthrough.livemd",
+        "livebooks/walkthrough.livemd",
         "guides/trust-and-roles.md",
         "guides/reading-the-chains.md",
         "guides/writing-a-source.md",
@@ -125,7 +125,7 @@ defmodule Truestamp.Verify.MixProject do
         "CHANGELOG.md",
         "LICENSE"
       ],
-      groups_for_extras: [Guides: ~r{guides/}],
+      groups_for_extras: [Guides: ~r{guides/}, Livebooks: ~r{livebooks/}],
       source_ref: "v#{@version}",
       groups_for_modules: [
         Verifying: [

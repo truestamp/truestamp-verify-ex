@@ -7,7 +7,7 @@ SPDX-License-Identifier: Apache-2.0
 
 `Truestamp.Verify` checks a Truestamp proof the way SPEC.md section 10 says a verifier
 must: steps 0 to 14, in order, each giving rows that say what it found. This guide covers
-the calls most callers need. [The walkthrough](walkthrough.livemd) runs them over a real
+the calls most callers need. [The walkthrough](../livebooks/walkthrough.livemd) runs them over a real
 proof and prints every value along the way.
 
 ## A first run

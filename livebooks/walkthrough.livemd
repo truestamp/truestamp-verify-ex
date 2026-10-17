@@ -7,8 +7,14 @@ SPDX-License-Identifier: Apache-2.0
 
 ```elixir
 Mix.install([
-  {:truestamp_verify, path: Path.expand("..", __DIR__)},
-  {:req, "~> 0.7"}
+  {:truestamp_verify,
+   github: "truestamp/truestamp-verify-ex", ref: "4c47210adcd20e14e78303e2e406143863c056ae"},
+  {:req, "~> 0.7"},
+  {:truestamp_verification,
+   github: "truestamp/truestamp-verification",
+   ref: "10dcb7df52bb2b51527b0399e5658f431cfb3ae6",
+   app: false,
+   compile: false}
 ])
 ```
 
@@ -34,15 +40,20 @@ but the first, whose `Mix.install` its own project already satisfies. It fails i
 hashes, signs, verifies or decodes anything of its own, or names a module that only the
 tests have.
 
-The proofs come from the conformance vectors of
-[truestamp-verification](https://github.com/truestamp/truestamp-verification), the
-repository of `SPEC.md`. To open the notebook, run `mix deps.get` in a checkout of this
-library, which fetches that repository into `deps/truestamp_verification` at the commit
-`mix.exs` pins, then start Livebook with `livebook server` and open
-`guides/walkthrough.livemd`, or open the file in the Livebook desktop app. The first cell
-installs the library from this checkout, with Req for the live section. The first time, it
-fetches the library's one dependency, the Truestamp Merkle library, from GitHub, and Req
-from Hex.
+The first cell installs two repositories from GitHub, each pinned to a commit:
+
+* [truestamp-verify-ex](https://github.com/truestamp/truestamp-verify-ex), the library
+  `Truestamp.Verify`, with Req for the live section;
+* [truestamp-verification](https://github.com/truestamp/truestamp-verification), the
+  repository of `SPEC.md`, at the commit the library is tested against. Its conformance
+  vectors are the proofs this notebook walks through: the notebook reads those files, and
+  the install never compiles them.
+
+The first time, the install also fetches the library's one dependency, the Truestamp Merkle
+library, from GitHub, and Req from Hex. To open the notebook, click **Run in Livebook** in
+the library's README, which imports this file into your own Livebook, or open
+`livebooks/walkthrough.livemd` from a checkout of the library with `livebook server` or the
+Livebook desktop app.
 
 ## Configuration
 
@@ -59,8 +70,8 @@ To walk through another proof, change `proof_file`. Any proof under `vectors/pos
 runs under this configuration: `beacon`, `beacon-empty`, `block`, `block-rotation`,
 `block-emergency-rotation`, `entropy_bitcoin`, `entropy_nist`, `entropy_stellar`, `item`,
 `item-genesis-witness` and `item-rotation-witness`, each `<name>.proof.json`. To read the
-vectors of another checkout of truestamp-verification, change `verification`. Other
-configurations:
+vectors of another checkout of truestamp-verification, set `verification` to its path.
+Other configurations:
 
 * keyless mode, where the signature is checked only against the key the proof carries:
   `trust: :keyless`. The label is then `unattributed` unless a row fails (section 8.3);
@@ -78,7 +89,8 @@ configurations:
   `expected_hash: "<lowercase hex>"`.
 
 ```elixir
-verification = Path.expand("../deps/truestamp_verification", __DIR__)
+# The checkout of truestamp-verification that the first cell installed.
+verification = Path.join(Mix.install_project_dir(), "deps/truestamp_verification")
 vectors = Path.join(verification, "vectors")
 keyring_file = Path.join(vectors, "keyring.test.json")
 proof_file = Path.join(vectors, "positive/item.proof.json")

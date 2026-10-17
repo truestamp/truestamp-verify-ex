@@ -3,7 +3,7 @@
 
 defmodule Truestamp.Verify.WalkthroughTest do
   @moduledoc """
-  `guides/walkthrough.livemd`, the notebook that prints every value the trace of SPEC.md
+  `livebooks/walkthrough.livemd`, the notebook that prints every value the trace of SPEC.md
   section 10.6 holds, each declared value beside the value the verifier recomputes for it,
   then the reads and the window of an online run answered from a replay file. Its Elixir
   cells run here as Livebook runs them, in order and in one binding, all but the first,
@@ -23,7 +23,7 @@ defmodule Truestamp.Verify.WalkthroughTest do
   alias Truestamp.Verify.Steps.Verdict
   alias Truestamp.Verify.Test.{Cases, StrictJSON, Verification}
 
-  @notebook Path.expand("../guides/walkthrough.livemd", __DIR__)
+  @notebook Path.expand("../livebooks/walkthrough.livemd", __DIR__)
   @external_resource @notebook
   @spec_md Verification.path("SPEC.md")
   @lib Path.expand("../lib", __DIR__)
@@ -72,7 +72,7 @@ defmodule Truestamp.Verify.WalkthroughTest do
   @after_signature ~w(SHAPE POLICY DERIVE CHAIN SOURCES WINDOW EXPECTED_HASH)
   @after_derive ~w(CHAIN SOURCES WINDOW EXPECTED_HASH)
   # The configuration cell's line that names the checkout of truestamp-verification.
-  @checkout ~s|verification = Path.expand("../deps/truestamp_verification", __DIR__)\n|
+  @checkout ~s|verification = Path.join(Mix.install_project_dir(), "deps/truestamp_verification")\n|
 
   @keyless "Keyless      the signature was checked only against the key the document " <>
              "carries (SPEC.md 8.3)\n"
@@ -93,24 +93,39 @@ defmodule Truestamp.Verify.WalkthroughTest do
     assert "item" in @names
   end
 
-  test "its first cell installs this checkout of the library, with Req, and only it calls Mix.install" do
+  test "its first cell installs the library and the vectors, each pinned, and only it calls Mix.install" do
     [{_line, setup} | rest] = cells()
 
-    assert setup ==
-             "Mix.install([\n  {:truestamp_verify, path: Path.expand(\"..\", __DIR__)},\n" <>
-               "  {:req, \"~> 0.7\"}\n])\n"
+    {{:., _, [{:__aliases__, _, [:Mix]}, :install]}, _, [deps]} = Code.string_to_quoted!(setup)
+    {deps, []} = Code.eval_quoted(deps)
 
-    assert Mix.Project.config()[:app] == :truestamp_verify
-    assert Path.expand("..", Path.dirname(@notebook)) == Path.dirname(Mix.Project.project_file())
-    refute Enum.any?(rest, fn {_line, code} -> code =~ "Mix.install" end)
+    {:truestamp_verification, test_dep} =
+      List.keyfind(Mix.Project.config()[:deps], :truestamp_verification, 0)
+
+    {:req, req, _optional} = List.keyfind(Mix.Project.config()[:deps], :req, 0)
+
+    assert [
+             {:truestamp_verify, github: "truestamp/truestamp-verify-ex", ref: ref},
+             {:req, ^req},
+             {:truestamp_verification,
+              github: "truestamp/truestamp-verification", ref: vectors, app: false, compile: false}
+           ] = deps
+
+    # The vectors are those of the commit the library's own tests run against.
+    assert vectors == Keyword.fetch!(test_dep, :ref)
+
+    # The library is a full commit id of this repository's history: a published commit that
+    # Livebook can fetch, never a branch that moves.
+    assert ref =~ ~r/\A[0-9a-f]{40}\z/
+    root = Path.dirname(Mix.Project.project_file())
+    assert {_out, 0} = System.cmd("git", ["-C", root, "merge-base", "--is-ancestor", ref, "HEAD"])
+
+    refute Enum.any?(rest, fn {_line, code} -> code =~ ~r/\bMix\.install\(/ end)
   end
 
-  test "its configuration cell reads the vectors of the checkout `mix deps.get` fetches" do
+  test "its configuration cell reads the vectors the first cell installed" do
     [_setup, {_line, configuration} | _rest] = cells()
     assert configuration =~ @checkout
-
-    assert Path.expand("../deps/truestamp_verification", Path.dirname(@notebook)) ==
-             Path.join(Path.dirname(Mix.Project.project_file()), "deps/truestamp_verification")
   end
 
   test "each cell is as mix format writes it" do
@@ -541,7 +556,7 @@ defmodule Truestamp.Verify.WalkthroughTest do
       {{value, binding}, output} = with_io(fn -> eval(code, line, binding) end)
 
       assert value == :ok,
-             "the cell at line #{line} of guides/walkthrough.livemd gives " <>
+             "the cell at line #{line} of livebooks/walkthrough.livemd gives " <>
                "#{inspect(value, limit: 5, printable_limit: 80)}, not :ok, and Livebook " <>
                "shows that value under the cell's output"
 

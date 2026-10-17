@@ -16,9 +16,8 @@ permissions:
 # .tool-versions pins, and one on Elixir 1.19.3 with OTP 28.1.1, the oldest version mix.exs
 # allows.
 #
-# The tests read the conformance vectors from truestamp-verification, a private repository,
-# through a test-only Mix dependency. Fetching it needs the secret TRUESTAMP_VERIFICATION_TOKEN:
-# a fine-grained token with read access to that repository's contents, and nothing else.
+# The tests read the conformance vectors from truestamp-verification, a public repository,
+# through a test-only Mix dependency, so no secret is needed.
 jobs:
   check:
     name: task check (.tool-versions)
@@ -36,6 +35,10 @@ jobs:
       - name: Checkout
         # A git checkout: task style lists the files to check with git ls-files.
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          # The whole history: the walkthrough's test checks that the library commit the
+          # notebook pins is one of this repository's.
+          fetch-depth: 0
 
       - name: Install Erlang, Elixir and Task via mise
         uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1
@@ -44,15 +47,6 @@ jobs:
           cache_key_prefix: mise-prebuilt
         env:
           GITHUB_TOKEN: ${{ github.token }}
-
-      - name: Give git read access to truestamp-verification
-        env:
-          TOKEN: ${{ secrets.TRUESTAMP_VERIFICATION_TOKEN }}
-        run: |
-          test -n "$TOKEN" || { echo "The secret TRUESTAMP_VERIFICATION_TOKEN is not set."; exit 1; }
-          git config --global \
-            url."https://x-access-token:${TOKEN}@github.com/truestamp/truestamp-verification".insteadOf \
-            "https://github.com/truestamp/truestamp-verification"
 
       - name: Restore the dependencies and builds
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
@@ -89,6 +83,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          # The whole history: the walkthrough's test checks that the library commit the
+          # notebook pins is one of this repository's.
+          fetch-depth: 0
 
       - name: Install Erlang, Elixir and Task via mise
         uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1
@@ -97,15 +95,6 @@ jobs:
           cache_key_prefix: mise-prebuilt-${{ env.MISE_ERLANG_VERSION }}-${{ env.MISE_ELIXIR_VERSION }}
         env:
           GITHUB_TOKEN: ${{ github.token }}
-
-      - name: Give git read access to truestamp-verification
-        env:
-          TOKEN: ${{ secrets.TRUESTAMP_VERIFICATION_TOKEN }}
-        run: |
-          test -n "$TOKEN" || { echo "The secret TRUESTAMP_VERIFICATION_TOKEN is not set."; exit 1; }
-          git config --global \
-            url."https://x-access-token:${TOKEN}@github.com/truestamp/truestamp-verification".insteadOf \
-            "https://github.com/truestamp/truestamp-verification"
 
       - name: Restore the dependencies and builds
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
