@@ -18,7 +18,10 @@ without touching the engine. Pick the smallest contract that fits:
 
 A source answers some of the read kinds of `Truestamp.Verify.Reader`'s table for one chain.
 It maps its server's answer onto the fields of the read kind and judges nothing: the engine
-checks every field's class and compares it with the proof.
+checks the class of each field its rule reads and compares it with the proof. An answer is
+judged on the fields its rule reads at that point (SPEC.md section 10.4), so a field the
+rule does not read there is never checked, such as the median time past of the best-chain
+block at a commitment entry's height.
 
 ```elixir
 defmodule MyApp.BitcoinIndexer do

@@ -15,8 +15,11 @@ defmodule Truestamp.Verify.Readers.Replay do
 
   - The file stands as the operator-pinned source for each Stellar or Bitcoin network whose
     identity read it holds, and for NIST: `c:Truestamp.Verify.Reader.sources/3` names one
-    source, `"replay"`, for those, and none for any other network, which makes a run that
-    pins one a `configuration_error` (section 10.2, step 0).
+    source, the atom `:replay`, for those, and none for any other network, which makes a
+    run that pins one a `configuration_error` (section 10.2, step 0). It answers from the
+    records that name no source. A source's name in a case's `sources` is a string, so no
+    name, `"replay"` among them, can spell it, and a named source never reads the records
+    of a network's one source.
   - A network given several sources with the `:sources` option of `new/2`, as a case's
     `sources` member gives them (section 13.2), has those sources, in their order and under
     their policy, each answering from the records that name it.
@@ -27,6 +30,10 @@ defmodule Truestamp.Verify.Readers.Replay do
   `cached: false`, and the `fetched_at` given to `new/2`, the same for every read, so two
   runs with one reader give equal reports. A replay file stands for live reads, so no answer
   is marked cached, and none carries a `tip_height` (`Truestamp.Verify.Reader`, "Caches").
+
+  A case's `config` names no keyring origin, so the keyring read a case makes is of
+  www.truestamp.com (section 13.2), which `Truestamp.Verify.KeyringSources.Replay` answers
+  from the same file.
   """
 
   @behaviour Truestamp.Verify.Reader
@@ -51,7 +58,8 @@ defmodule Truestamp.Verify.Readers.Replay do
   @enforce_keys [:reads, :fetched_at]
   defstruct [:reads, :fetched_at, named: %{}]
 
-  @source "replay"
+  # A network's one source: an atom, which no source name, a string, can spell.
+  @source :replay
 
   @doc """
   The reader of the replay file at `path`: `{:ok, {Replay, state}}`, or `{:error, reason}`.
@@ -128,8 +136,8 @@ defmodule Truestamp.Verify.Readers.Replay do
   @impl true
   def read(%__MODULE__{reads: reads, fetched_at: fetched_at}, source, network, kind, params) do
     read = key(network, kind, params)
-    meta = %{source: source, fetched_at: fetched_at, cached: false}
-    named = if source == @source, do: nil, else: source
+    {named, name} = if source == @source, do: {nil, "replay"}, else: {source, source}
+    meta = %{source: name, fetched_at: fetched_at, cached: false}
 
     case Map.fetch(reads, {read, named}) do
       {:ok, %{"outcome" => "found", "value" => value}} -> {:ok, value, meta}

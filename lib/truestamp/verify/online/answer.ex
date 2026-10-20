@@ -21,10 +21,15 @@ defmodule Truestamp.Verify.Online.Answer do
 
   **Fields.** A found answer holds the fields of its kind of read, each in its class
   (section 13.2's table). The rules read each field through `field/3`, which gives
-  `{:ok, value}` for a field present in its class, or `:error`. An answer whose field is
-  missing, or in another class, is unusable for the check that reads that field
+  `{:ok, value}` for a field present in its class, or `:error`. The fields a read uses are
+  those its rule reads at that point, not every field of its kind (section 10.4), so an
+  answer that holds each of them, in its class, is judged on them, whatever else it lacks
+  or gives in another class: the best-chain block at a Bitcoin entry's height is judged
+  without its `median_time_past`, and a Stellar ledger read after a transaction not found
+  is judged on being found. An answer whose field the rule reads at that point is missing,
+  or in another class, is unusable for the check that reads that field
   (`source_unreachable`), but a contradiction in a field that is present still fails the row
-  (section 10.4), so a rule reads every field before it decides.
+  (section 10.4), so a rule reads each field it uses at that point before it decides.
 
   `:unix_time` is INT for a field that becomes an edge's instant, Bitcoin's
   `median_time_past`: Unix seconds that a TIME can write, so the years 0000 to 9999

@@ -60,6 +60,9 @@ task check
 
 1. Set `@verification_ref` in `mix.exs` to the new commit, and run `mix deps.get`.
 2. Run `task spec-sync` to mirror its `spec/`.
-3. Run `task check`, and fix what the new cases find.
-4. Commit the three together, so the pin, the mirror and the code that passes it move as
-   one.
+3. Move the `truestamp_verification` `ref` in the first cell of
+   `livebooks/walkthrough.livemd` to the same commit. The notebook's library `ref` moves
+   separately, after a push.
+4. Run `task check`, and fix what the new cases find.
+5. Commit them together, so the pin, the mirror, the notebook's vectors `ref` and the code
+   that passes them move as one.

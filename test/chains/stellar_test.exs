@@ -128,6 +128,15 @@ defmodule Truestamp.Verify.Chains.StellarTest do
                {:skip, :source_unreachable}
     end
 
+    test "a ledger found there is judged on being found, whatever fields it holds (10.4)" do
+      held = root(%{"elder" => 1, "latest" => 5000})
+
+      for fields <- [%{}, %{"closed_at" => "noon", "hash" => 7}] do
+        outcome = commitment(missing(Map.merge(held, ledger(found(fields)))))
+        assert verdict(outcome) == {:fail, :chain_mismatch}, inspect(fields)
+      end
+    end
+
     test "the boundaries: L = latest - 60 and L = elder are held" do
       held = Map.merge(root(%{"elder" => 1000, "latest" => 1060}), ledger(not_found()))
       assert verdict(commitment(missing(held))) == {:skip, :not_held_by_source}

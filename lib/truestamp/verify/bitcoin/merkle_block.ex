@@ -8,13 +8,13 @@ defmodule Truestamp.Verify.Bitcoin.MerkleBlock do
   partial-tree and duplicate-pair rules are reported in the order the walk meets them: the
   counts of hashes and flag bits before the walk, then the first duplicate pair or the
   first node that finds no bit or hash left, then, after the walk, whether it used every
-  hash and every flag bit.
+  hash, reached every flag octet and left the bits after the last one used zero.
 
   | Rule | Holds when | Else |
   |---|---|---|
   | parse | they parse completely as a BIP 37 merkleblock: an 80-octet header; `total_txs`, 4 octets little-endian; a compact size and that many 32-octet hashes; a compact size and that many flag octets; and nothing after, with every compact size in its shortest form | `:parse` |
   | total_txs | `total_txs` is from 1 to BITCOIN_MAX_TOTAL_TXS | `:total_txs` |
-  | partial tree | the partial Merkle tree walks as Bitcoin Core's CPartialMerkleTree walks one: it has no more hashes than `total_txs` and no fewer flag bits than hashes, and the walk uses every hash and every flag bit, with the bits after the last one used in the final flag octet zero | `:partial_tree` |
+  | partial tree | the partial Merkle tree walks as Bitcoin Core's CPartialMerkleTree walks one: it has no more hashes than `total_txs` and no fewer flag bits than hashes, and the walk uses every hash and reaches every flag octet (there are (b + 7) / 8 of them, rounded down, for b the number of flag bits it uses), with the bits after the last one used zero | `:partial_tree` |
   | duplicate pair | no node of the walk has a right child equal to its left (CVE-2012-2459) | `:duplicate_pair` |
   | matches | the walk matches exactly one transaction | `:matches` |
   | merkle root | the root the walk gives equals the header's Merkle root field | `:merkle_root` |
@@ -90,8 +90,8 @@ defmodule Truestamp.Verify.Bitcoin.MerkleBlock do
     if total <= Constants.bitcoin_max_total_txs(), do: :ok, else: {:error, :total_txs}
   end
 
-  # The walk of CPartialMerkleTree::ExtractMatches, with the check that the unused bits of
-  # the final flag octet are zero.
+  # The walk of CPartialMerkleTree::ExtractMatches, with the checks that it reaches every
+  # flag octet and that the bits after the last one it used are zero.
   defp walk(total, hashes, flags) do
     bits = bit_size(flags)
 

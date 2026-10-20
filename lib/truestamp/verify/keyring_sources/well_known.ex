@@ -9,7 +9,9 @@ if Code.ensure_loaded?(Req) do
     verifier's online run under `prod` as its `:current_keyring` (SPEC.md section 8.3), or
     another origin, as the CLI's `--base-url` names one. A keyring from another origin is a
     supplied keyring, so its source is given as the trust `{:keyring_source, source}`; given
-    as `:current_keyring`, the run is a `configuration_error`.
+    as `:current_keyring`, the run is a `configuration_error`. A conformance case's `config`
+    names no origin, so the cases read only Truestamp's keyring, and another origin is tested
+    in this library's own tests (section 13.2).
 
     It gives the keyring's bytes as read, which the engine loads through the load checks of
     step 0 and whose SHA-256 is the trust root's digest. Any failure, a status other than 200

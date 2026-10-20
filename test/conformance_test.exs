@@ -21,7 +21,18 @@ defmodule Truestamp.Verify.ConformanceTest do
 
   test "the cases file holds cases" do
     {:ok, cases} = Conformance.cases(Path.join(@vectors, "cases.json"))
-    assert length(cases) >= 443
+    assert length(cases) >= 481
+  end
+
+  # Pinned: a run against truestamp-verification's main (.github/workflows/upstream.yml)
+  # reads another commit, whose cases may number more, and leaves this test out.
+  @tag :pinned
+  test "the pinned commit's cases: 481, of them 394 offline and 87 online" do
+    {:ok, cases} = Conformance.cases(Path.join(@vectors, "cases.json"))
+    assert length(cases) == 481
+    assert Enum.count(cases, &Conformance.online?/1) == 87
+    assert Enum.count(cases, &(not Conformance.online?(&1))) == 394
+    assert length(Enum.uniq_by(cases, & &1["id"])) == 481
   end
 
   for %{"id" => id} = kase <- cases do

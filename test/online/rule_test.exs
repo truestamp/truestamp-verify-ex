@@ -493,8 +493,14 @@ defmodule Truestamp.Verify.Online.RuleTest do
       Map.new(entries ++ genesis ++ entropy, fn {at, value} -> {Pointer.encode(at), value} end)
     end
 
-    defp judge(reader, config, {module, rule, value, top_level?, pin}, part, source) do
+    defp judge(reader, config, {module, rule, value, top_level?, pin}, part, name) do
       network = if module == Nist, do: nil, else: config.networks[pin][module.name()]
+
+      # The reader's id of the source a row's values name: a string names itself, and an
+      # atom, such as the replay's one source `:replay`, is named by its text.
+      {reader_module, state} = reader
+      {:ok, ids, _policy} = reader_module.sources(state, module.name(), network)
+      source = Enum.find(ids, &(to_string(&1) == name)) || flunk("no source #{name}")
 
       confirmed =
         if module == Nist,

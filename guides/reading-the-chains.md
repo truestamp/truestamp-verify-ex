@@ -15,9 +15,10 @@ reads gave.
 ## The reader
 
 Every read goes through a `Truestamp.Verify.Reader`, given with the `:reader` option. The
-engine owns every judgement: it checks each field of each answer, refuses a cached answer
-where the spec requires a live read, keeps one answer per read for the whole run, and turns
-a reader that crashes into an unreachable read. A reader only fetches.
+engine owns every judgement: it judges each answer on the fields its rule reads at that
+point (SPEC.md section 10.4), refuses a cached answer where the spec requires a live read,
+keeps one answer per read for the whole run, and turns a reader that crashes into an
+unreachable read. A reader only fetches.
 
 The reads are named as the replay files of section 13.2 name them, so a reader can be
 anything that can answer them: the bundled HTTP sources, a cache in front of them, an
@@ -183,15 +184,18 @@ a reader that raises, throws or exits turned into an unreachable read. With no `
 each read runs in the calling process, and with one in a task whose `$callers` holds the
 caller (`Truestamp.Verify.Reader`, "Processes").
 
-A run reaches a rule only after SHAPE and DERIVE pass, and a rule checks nothing offline,
-so make DERIVE's checks of the value first:
+A run reaches a rule only after SHAPE and DERIVE pass. A rule computes offline only the
+values its reads are compared with: Stellar's computes the epoch hash from `epoch.record`,
+and Bitcoin's parses the `txoutproof`, refusing one that is not well formed, for its header
+and `total_txs`. So make DERIVE's other checks of the value first:
 
 - for a Bitcoin commitment entry, require every check of
   `c:Truestamp.Verify.CommitmentChain.evidence_checks/2` of `Truestamp.Verify.Chains.Bitcoin`
-  to pass before `commitment/2`. The
-  rule compares the block at the entry's height with the `header_hash` and `total_txs` the
-  entry carries, and nothing more, so alone it passes an entry whose transaction commits
-  another epoch, or none;
+  to pass before `commitment/2`. The rule compares the best-chain block at the entry's
+  height with the hash of the header inside the entry's `txoutproof` and with that
+  `txoutproof`'s `total_txs` (SPEC.md section 10.4), and nothing more: it reads neither the
+  `header_hash` the entry carries nor its `raw_transaction`, so alone it passes an entry
+  whose transaction commits another epoch, or none;
 - a Stellar commitment entry needs no such step: its rule computes the epoch hash from
   `epoch.record` and compares the memo with it;
 - for an entropy object, recompute its `entropy_hash` as DERIVE does,

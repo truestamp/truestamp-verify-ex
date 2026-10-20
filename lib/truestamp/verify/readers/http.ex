@@ -96,13 +96,17 @@ if Code.ensure_loaded?(Req) do
       |> new()
     end
 
+    # A policy's form: `:first`, `:all` or `{:at_least, n}`, never a module, so that a source
+    # given with options, `{module, [option, ...]}`, is never taken for several sources.
+    defguardp is_policy(policy)
+              when policy in [:first, :all] or (is_tuple(policy) and elem(policy, 0) == :at_least)
+
     # One network's sources, with ids that name them in a row's values, after checking that
     # each source answers the reads of its chain.
-    defp entry(:nist, {_policy, [_, _ | _]}),
+    defp entry(:nist, {policy, [_, _ | _]}) when is_policy(policy),
       do: raise(ArgumentError, "nist: NIST's Randomness Beacon is one source (SPEC.md 9)")
 
-    defp entry(chain, {policy, [_ | _] = sources})
-         when policy in [:first, :all] or (is_tuple(policy) and elem(policy, 0) == :at_least) do
+    defp entry(chain, {policy, [_ | _] = sources}) when is_policy(policy) do
       valid_policy!(policy, length(sources))
       sources = Enum.map(sources, &checked!(chain, &1))
       ids = sources |> Enum.map(fn {module, options} -> module.describe(options) end) |> unique()

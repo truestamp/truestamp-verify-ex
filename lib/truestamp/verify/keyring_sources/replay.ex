@@ -9,6 +9,12 @@ defmodule Truestamp.Verify.KeyringSources.Replay do
   A found answer's value is `{"keyring": <the keyring read>}`, a JSON value with no bytes of
   its own, so the keyring it gives has no digest (section 13.2). Any other answer, or none,
   is a failed read.
+
+  A case's `config` names no keyring origin, so every keyring read a conformance case makes
+  is of www.truestamp.com, the default `url` here (section 13.2). A keyring read from
+  another origin, such as `Truestamp.Verify.Online.defaults/1`'s `:keyring_origin` gives,
+  is a supplied keyring (section 8.3); no case can name one, so this library tests that
+  option in its own tests.
   """
 
   @behaviour Truestamp.Verify.KeyringSource

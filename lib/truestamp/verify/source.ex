@@ -13,8 +13,9 @@ defmodule Truestamp.Verify.Source do
   `{:error, :not_found, meta}`, or `{:error, reason}`.
 
   A source maps its server's answer onto the fields of the read kind
-  (`Truestamp.Verify.Reader`'s table) and judges nothing: the engine checks every field's
-  class and compares it with the proof. The bundled sources:
+  (`Truestamp.Verify.Reader`'s table) and judges nothing: the engine checks the class of
+  each field its rule reads at that point and compares it with the proof (SPEC.md section
+  10.4). The bundled sources:
 
   | Module | Chain | Kinds |
   |---|---|---|

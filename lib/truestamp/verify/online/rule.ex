@@ -79,19 +79,24 @@ defmodule Truestamp.Verify.Online.Rule do
   ### What a run checks first
 
   A run reaches a rule only after SHAPE and DERIVE have passed (SPEC.md section 10.2, the
-  external gate). A rule compares what it reads with values the entry carries and checks
-  nothing offline, so a caller makes DERIVE's checks of the value itself:
+  external gate). A rule computes offline only the values its reads are compared with:
+  Stellar's computes the epoch hash from `epoch.record`, and Bitcoin's parses the
+  `txoutproof`, refusing one that is not well formed, for its header and `total_txs`. Every
+  other check DERIVE makes of the value is the caller's:
 
   - **A Bitcoin commitment entry.** Require every check of
     `c:Truestamp.Verify.CommitmentChain.evidence_checks/2` of
     `Truestamp.Verify.Chains.Bitcoin` to pass, as in the example, before `commitment/2`.
-    Bitcoin's rule compares the block at the entry's height with the `header_hash` and
-    `total_txs` the entry carries, and nothing more: it passes an entry whose transaction
-    commits another epoch, or none. Those checks tie the transaction to the header and its
-    OP_RETURN to the epoch hash computed from `epoch.record`; the rule then places that
-    header on the best chain, and SPEC.md 10.4 takes both to pass a Bitcoin entry.
-  - **A Stellar commitment entry.** Its rule computes the epoch hash from `epoch.record`
-    itself, and compares the transaction's memo with it.
+    Bitcoin's rule compares the best-chain block at the entry's height with the hash of the
+    header inside the entry's `txoutproof` and with that `txoutproof`'s `total_txs`
+    (SPEC.md section 10.4, item 3 of the Bitcoin rule), and nothing more: it reads neither
+    the `header_hash` the entry carries nor its `raw_transaction`, so alone it passes an
+    entry whose transaction commits another epoch, or none. Those checks tie the
+    transaction to the header and its OP_RETURN to the epoch hash computed from
+    `epoch.record`, and the header to the target its nBits encodes; the rule then places
+    that header on the best chain, and SPEC.md 10.4 takes both to pass a Bitcoin entry.
+  - **A Stellar commitment entry.** No step is needed: its rule computes the epoch hash
+    from `epoch.record` itself, and compares the transaction's memo with it.
   - **An entropy object.** Recompute its `entropy_hash` as DERIVE does,
     `Truestamp.Verify.Hash.hash_hex(:entropy_hash, object)`, and compare it with the
     `entropy_hash` that names the object. SOURCES reads only an entropy object whose
@@ -230,9 +235,10 @@ defmodule Truestamp.Verify.Online.Rule do
 
   Options: `:chain`, `"stellar"` or `"bitcoin"` (NIST has no identity read); `:network`, a
   network `Truestamp.Verify.Spec.networks/0` names for that chain, such as `"mainnet"`; and
-  `:source` and `:deadline` as `new/2` takes them. An option missing, unknown or out of its values raises. The read goes
-  through the engine's side of every read, so an identity answer marked cached is
-  unreachable, and it runs in the calling process or a task, as a read of `new/2` does.
+  `:source` and `:deadline` as `new/2` takes them. An option missing, unknown or out of its
+  values raises. The read goes through the engine's side of every read, so an identity
+  answer marked cached is unreachable, and it runs in the calling process or a task, as a
+  read of `new/2` does.
 
   How often to confirm is the caller's choice. A run confirms each source once, before its
   first read; a caller that judges many entries can confirm each source once per chain and

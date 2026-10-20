@@ -10,9 +10,10 @@ defmodule Truestamp.Verify.Config do
   choice is explicit:
 
   - `external/1`, every verifier but Truestamp's own: Truestamp's CLI, the reference
-    verifiers, and any other (section 8.3). Its trust root is the compiled pin offline, the
-    keyring read from Truestamp online, a keyring the caller supplies, or none (keyless).
-    `Truestamp.Verify.verify/2` builds this one from its keyword options.
+    verifier of section 13.1 (this library), and any other (section 8.3). Its trust root is
+    the compiled pin offline, the keyring read from Truestamp online, a keyring the caller
+    supplies, or none (keyless). `Truestamp.Verify.verify/2` builds this one from its
+    keyword options.
   - `internal/1`, Truestamp's own verifier (section 8.2): its trust root is its key chain,
     the keys its chain's key events introduce, verified before the run. It has no keyless
     mode, accepts no supplied keyring, never falls back to the compiled pin, and fails closed

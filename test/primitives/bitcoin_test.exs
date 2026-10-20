@@ -255,7 +255,8 @@ defmodule Truestamp.Verify.BitcoinTest do
       assert rule not in [:parse, :total_txs]
     end
 
-    test "with an unused hash or an unused flag bit fails partial_tree", %{regtest: regtest} do
+    test "with an unused hash, a set bit after the last one used, a flag octet the walk does not reach, or too few hashes or flags fails partial_tree",
+         %{regtest: regtest} do
       {header, total, hashes, <<flags>>} = split(regtest)
 
       assert MerkleBlock.parse(merkle_block(header, total, hashes ++ [hd(hashes)], <<flags>>)) ==

@@ -86,8 +86,23 @@ defmodule Truestamp.Verify.Readers.HTTPTest do
 
     assert_raise ArgumentError, ~r/not a source/, fn -> HTTP.new(nist: "nist") end
 
-    assert_raise ArgumentError, ~r/one source/, fn ->
-      HTTP.new(nist: {:all, [{NistBeacon, []}, {NistBeacon, [base_url: "https://b.test"]}]})
+    for policy <- [:first, :all, {:at_least, 1}] do
+      assert_raise ArgumentError, ~r/one source/, fn ->
+        HTTP.new(nist: {policy, [{NistBeacon, []}, {NistBeacon, [base_url: "https://b.test"]}]})
+      end
+    end
+  end
+
+  test "NIST's one source takes any options, alone or under a policy of one" do
+    options = [base_url: "https://beacon.test", req_options: [], receive_timeout: 1_000]
+
+    for given <- [
+          {NistBeacon, Enum.take(options, 2)},
+          {NistBeacon, options},
+          {:first, [{NistBeacon, options}]}
+        ] do
+      {HTTP, state} = HTTP.new(nist: given)
+      assert HTTP.sources(state, "nist", nil) == {:ok, ["nist https://beacon.test"], :first}
     end
   end
 
@@ -218,7 +233,11 @@ defmodule Truestamp.Verify.Readers.HTTPTest do
              password: "p",
              req_options: [plug: {Req.Test, __MODULE__.Bitcoin}]}
         },
-        nist: {NistBeacon, req_options: [plug: {Req.Test, __MODULE__.Nist}]}
+        # NIST's one source with two options, a keyword list of two that is still one source.
+        nist:
+          {NistBeacon,
+           base_url: "https://beacon.test/beacon/2.0",
+           req_options: [plug: {Req.Test, __MODULE__.Nist}]}
       )
     end
 
@@ -279,6 +298,10 @@ defmodule Truestamp.Verify.Readers.HTTPTest do
                {"/witnesses/entropy_nist", :pass},
                {"/witnesses/entropy_stellar", :pass}
              ]
+
+      # NIST's row read its one source, the one given two options.
+      nist = Enum.find(online, &(&1.part == "/witnesses/entropy_nist"))
+      assert [%{"source" => "nist https://beacon.test/beacon/2.0"}] = nist.values["outcomes"]
 
       outcomes = for row <- online, outcome <- row.values["outcomes"], do: outcome
       assert length(outcomes) == length(online)

@@ -10,17 +10,20 @@ defmodule Truestamp.Verify.SchemaTest do
   #   does, while the verifier reads it as ECMA-262 does;
   # - parts: for every single defect of every sound value of P, the first failure in document
   #   order is at the pointer SPEC.md 10.2's rule gives (the member missing, extra or
-  #   forbidden, or the value that breaks its rule; for a count, the object or array);
+  #   forbidden, or the value that breaks its rule; for a count, the object or array), and
+  #   of two extra members either side of U+FFFF it is the one first in JCS order;
   # - the keywords' meaning, one test each where the vectors and samples do not reach.
   use ExUnit.Case, async: true
 
-  alias Truestamp.Verify.{JSON, Schema}
+  alias Truestamp.Verify
+  alias Truestamp.Verify.{JSON, Row, Schema}
 
   alias Truestamp.Verify.Test.{
     Cases,
     ProofMutants,
     Samples,
     SchemaSubset,
+    Signing,
     StrictJSON,
     Verification
   }
@@ -156,6 +159,28 @@ defmodule Truestamp.Verify.SchemaTest do
       assert first_part(put_in(proof, at, path)) == at ++ [2]
       assert ~w(commitments stellar ledger) in parts
       assert ~w(witnesses block record id) in parts
+    end
+
+    # SPEC.md 13.3 leaves this case to each verifier's own tests. By code point U+FF5A comes
+    # before U+1F600; by UTF-16 code unit, JCS's order, U+1F600 (D83D DE00) comes before
+    # U+FF5A, so the first failure is at U+1F600, in the schema's list and in SHAPE's row.
+    test "of two extra members either side of U+FFFF is the one first in JCS order" do
+      at = ~w(commitments stellar)
+
+      extra = fn proof ->
+        proof |> put_in(at ++ ["\u{FF5A}"], 1) |> put_in(at ++ ["\u{1F600}"], 1)
+      end
+
+      mutant = extra.(Samples.all()["item"]["proof"])
+      assert first_part(mutant) == at ++ ["\u{1F600}"]
+      assert hd(Schema.failures(envelope(mutant))).part == ["proof" | at ++ ["\u{1F600}"]]
+
+      bytes = "item" |> Signing.positive() |> extra.() |> Signing.signed()
+      {:ok, report} = Verify.verify(bytes, environment: :test, trust: :keyless)
+      assert report.code == :shape_invalid
+
+      assert [%Row{status: :fail, code: :shape_invalid, part: "/commitments/stellar/\u{1F600}"}] =
+               Enum.filter(report.rows, &(&1.step == :shape and &1.status == :fail))
     end
   end
 

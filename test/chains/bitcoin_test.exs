@@ -92,6 +92,15 @@ defmodule Truestamp.Verify.Chains.BitcoinTest do
       assert verdict(outcome) == {:pass, nil}
       assert outcome.candidate == nil
     end
+
+    test "is judged on the hash and transaction count alone, whatever else it lacks (10.4)" do
+      fields = %{"hash" => @header_hash, "transaction_count" => @total_txs}
+
+      for fields <- [fields, Map.put(fields, "median_time_past", "noon")] do
+        outcome = commitment(final(at(@height, found(fields))), top_level?: false)
+        assert verdict(outcome) == {:pass, nil}, inspect(fields)
+      end
+    end
   end
 
   describe "the candidate: the median time past at height + 10" do

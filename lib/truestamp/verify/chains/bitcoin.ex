@@ -37,12 +37,13 @@ defmodule Truestamp.Verify.Chains.Bitcoin do
 
   **A commitment entry**, with h its `height`:
 
-  1. read the tip's height, t; when h > t the row is `skip not_yet_indexed`, and when
-     t < h + BITCOIN_FINALITY, `skip chain_not_final`;
-  2. read the best-chain block at h: its hash must equal the `header_hash` this run
+  1. read the tip's height, t;
+  2. when h > t the row is `skip not_yet_indexed`, and when t < h + BITCOIN_FINALITY,
+     `skip chain_not_final`;
+  3. read the best-chain block at h: its hash must equal the `header_hash` this run
      computed from the txoutproof's header, and its transaction count the txoutproof's
      `total_txs`, or the row fails with `chain_mismatch`;
-  3. for a top-level entry, read the best-chain block at h + BITCOIN_FINALITY: its median
+  4. for a top-level entry, read the best-chain block at h + BITCOIN_FINALITY: its median
      time past is the entry's candidate for the submitted-before edge
      (`bitcoin_median_time_read`).
 
@@ -383,7 +384,7 @@ defmodule Truestamp.Verify.Chains.Bitcoin do
     end
   end
 
-  # Item 2: the best-chain block at the entry's height.
+  # Item 3: the best-chain block at the entry's height.
   defp block_at(context, height, header_hash, total_txs) do
     {answer, context} = Rule.read(context, :bitcoin_block_at_height, %{"height" => height})
 

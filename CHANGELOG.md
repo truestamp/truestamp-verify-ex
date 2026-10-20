@@ -30,3 +30,12 @@ SPDX-License-Identifier: Apache-2.0
 - A cached best-chain Bitcoin block at a height stands when its meta's `tip_height` is at
   least that height plus BITCOIN_FINALITY, as SPEC.md 10.4 allows; one with no tip, or a
   shorter one, is refused.
+- Follows truestamp-verification at 28a87ae53ee05632236af2f8c0d5819c8479a46e, and passes
+  its 481 cases (394 offline, 87 online): `@verification_ref`, `priv/spec.source` and the
+  walkthrough's vectors move to that commit. The docs follow its text: a `txoutproof`'s
+  walk reaches every flag octet, the bits after the last one used zero; an answer is judged
+  on the fields its rule reads at that point; a conformance case names no keyring origin.
+- `Readers.Replay` names a network's one source `:replay`, an atom no source name can
+  spell, so a source a case names `"replay"` reads only the records that name it.
+- `Readers.HTTP.new/1` takes NIST's one source with any number of options, and still
+  refuses two NIST sources.
