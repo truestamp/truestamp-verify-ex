@@ -58,14 +58,22 @@ defmodule Truestamp.Verify.Test.FakeReader do
   defp replay_answer(%{"outcome" => "not_found"}), do: not_found()
   defp replay_answer(%{"outcome" => "unreachable", "reason" => reason}), do: {:error, reason}
 
-  @doc "A meta of a found or not-found answer."
+  @doc """
+  A meta of a found or not-found answer, with `tip_height` when the option `:tip_height`
+  gives one.
+  """
   @spec meta(keyword()) :: map()
   def meta(options \\ []) do
-    %{
+    meta = %{
       source: Keyword.get(options, :source, "fake"),
       fetched_at: Keyword.get(options, :fetched_at, ~U[2026-10-16 12:00:00Z]),
       cached: Keyword.get(options, :cached, false)
     }
+
+    case Keyword.fetch(options, :tip_height) do
+      {:ok, tip} -> Map.put(meta, :tip_height, tip)
+      :error -> meta
+    end
   end
 
   @doc "A found answer."

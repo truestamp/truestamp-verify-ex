@@ -75,11 +75,7 @@ defmodule Truestamp.Verify.Steps.Reads do
   end
 
   defp evaluate(_run, %{identity: {:unreachable, reason}}, _key, _part, _rule, _options),
-    do: %Outcome{
-      status: :skip,
-      code: :source_unreachable,
-      values: %{"identity" => Answer.describe(reason)}
-    }
+    do: Rule.unconfirmed(reason)
 
   defp evaluate(run, %{id: id}, {_chain, network}, part, rule, options) do
     read = Reads.bind(run.config.reader, id, network, run.reads, run.deadline)

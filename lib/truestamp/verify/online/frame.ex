@@ -27,7 +27,7 @@ defmodule Truestamp.Verify.Online.Frame do
   # whose source was asked nothing else reports (section 10.4, what a row read).
 
   alias Truestamp.Verify.{Chains, Config}
-  alias Truestamp.Verify.Online.Reads
+  alias Truestamp.Verify.Online.{Answer, Reads}
 
   @type entry :: %{
           policy: term(),
@@ -159,9 +159,15 @@ defmodule Truestamp.Verify.Online.Frame do
   defp policy?({:at_least, n}, count) when is_integer(n), do: n in 1..count//1
   defp policy?(_policy, _count), do: false
 
-  # A forbidden identity is configuration_error; one that gives no usable answer leaves the
-  # source unreachable.
-  defp judge(module, {:found, fields, _meta}, production?) do
+  @doc false
+  # The judgement of one source's identity answer for the chain `module`, on a network that
+  # is the chain's production network exactly when `production?`: `:ok`, `:forbidden` (the
+  # run is configuration_error), or `{:unreachable, reason}` when it gives no usable answer
+  # (the source serves no read). `Truestamp.Verify.Online.Rule.confirm_identity/2` gives it
+  # to a caller.
+  @spec judge(module(), Answer.t(), boolean()) ::
+          :ok | :forbidden | {:unreachable, term()}
+  def judge(module, {:found, fields, _meta}, production?) do
     case module.production_identity?(fields) do
       {:ok, ^production?} -> :ok
       {:ok, _other} -> :forbidden
@@ -169,8 +175,8 @@ defmodule Truestamp.Verify.Online.Frame do
     end
   end
 
-  defp judge(_module, {:not_found, _meta}, _production?), do: {:unreachable, :identity_not_found}
-  defp judge(_module, {:unreachable, reason}, _production?), do: {:unreachable, reason}
+  def judge(_module, {:not_found, _meta}, _production?), do: {:unreachable, :identity_not_found}
+  def judge(_module, {:unreachable, reason}, _production?), do: {:unreachable, reason}
 
   # NIST has no network and no identity read, and is one source (section 9).
   defp nist({module, state}) do

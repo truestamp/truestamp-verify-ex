@@ -25,7 +25,8 @@ defmodule Truestamp.Verify.Readers.Replay do
 
   Every answer is stamped with its source's name (`"replay"` for a network's one source),
   `cached: false`, and the `fetched_at` given to `new/2`, the same for every read, so two
-  runs with one reader give equal reports.
+  runs with one reader give equal reports. A replay file stands for live reads, so no answer
+  is marked cached, and none carries a `tip_height` (`Truestamp.Verify.Reader`, "Caches").
   """
 
   @behaviour Truestamp.Verify.Reader

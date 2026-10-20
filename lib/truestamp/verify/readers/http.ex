@@ -35,6 +35,11 @@ if Code.ensure_loaded?(Req) do
     | Bitcoin `regtest` | none: a regtest chain is private to whoever runs it |
     | NIST | the Beacon at `https://beacon.nist.gov/beacon/2.0` |
 
+    The reader caches nothing: every answer is read live from its server when the engine
+    asks, and is `cached: false`, with no `tip_height` (`Truestamp.Verify.Reader`,
+    "Caches"). A cache belongs in a reader of its own, in front of this one or in place of
+    it.
+
     Production is the default only in the sense that matters: a run's environment chooses
     the networks it reads, and `:prod` reads only Stellar `public` and Bitcoin `mainnet`. A
     test network's source is used only by a run that pins that network.

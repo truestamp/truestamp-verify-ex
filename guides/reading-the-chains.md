@@ -129,11 +129,91 @@ the command's summary says which it was read from.
 its row says so. Each source takes `:receive_timeout` and `:req_options` for its own
 transport. A reader may answer from a cache, and each answer says whether it was cached and
 when it was fetched, but the engine refuses a cached answer to the reads that must be live:
-identity, the Stellar root, the Bitcoin tip, and every not-found answer (section 10.4). It
-refuses a cached best-chain Bitcoin block at a height too: the spec allows one only when it
-was read while the source's tip was at least that height plus BITCOIN_FINALITY, and no
-answer says what the tip was. A Bitcoin time that no TIME can write, past the year 9999, is
-an unusable answer, so its row is `skip source_unreachable`.
+identity, the Stellar root, the Bitcoin tip, and every not-found answer (section 10.4). A
+cached best-chain Bitcoin block at a height g stands only when its meta also carries
+`tip_height`, the source's tip when the block was read, of at least g + 10
+(BITCOIN_FINALITY); with no tip, or a shorter one, it is refused, so a cache in front of a
+Bitcoin source keeps the tip it read each block under (`Truestamp.Verify.Reader`,
+"Caches"). The bundled readers cache nothing. A Bitcoin time that no TIME can write, past
+the year 9999, is an unusable answer, so its row is `skip source_unreachable`.
+
+## One entry, outside a run
+
+A service that stores commitments, or checks them before it signs, can judge one entry
+against one source with the library's own rules, without a proof. It writes a
+`Truestamp.Verify.Reader`, the same one a run takes, and judges nothing itself:
+
+```elixir
+alias Truestamp.Verify.Chains
+alias Truestamp.Verify.Online.Rule
+
+reader = {MyApp.ChainReader, state}
+
+case Rule.confirm_identity(reader, chain: "stellar", source: :horizon, network: "public") do
+  :ok ->
+    context =
+      Rule.new(reader,
+        source: :horizon,
+        network: "public",
+        part: "/commitments/stellar",
+        top_level?: true,
+        deadline: 10_000
+      )
+
+    Chains.Stellar.commitment(context, entry)
+
+  {:unreachable, reason} ->
+    Rule.unconfirmed(reason)
+
+  :forbidden ->
+    {:error, :another_network}
+end
+```
+
+`Truestamp.Verify.Online.Rule.confirm_identity/2` is step 0's identity read for one
+source: `:ok`, `:forbidden` for a source on another network, or `{:unreachable, reason}`,
+for which `Truestamp.Verify.Online.Rule.unconfirmed/1` gives the outcome a run gives each
+of that source's entries, `skip source_unreachable`. Judge no entry with a source that is
+forbidden or unconfirmed. Confirm once per chain and network, before the first entry; how
+long to trust that answer is yours to choose. The network is one the specification names
+for the chain, such as `"public"`, and anything else raises.
+`Truestamp.Verify.Online.Rule.new/2` binds a context to the reader, a source and a network,
+with every read rule of a run: answers normalized, the cache rules above, the deadline, and
+a reader that raises, throws or exits turned into an unreachable read. With no `:deadline`
+each read runs in the calling process, and with one in a task whose `$callers` holds the
+caller (`Truestamp.Verify.Reader`, "Processes").
+
+A run reaches a rule only after SHAPE and DERIVE pass, and a rule checks nothing offline,
+so make DERIVE's checks of the value first:
+
+- for a Bitcoin commitment entry, require every check of
+  `c:Truestamp.Verify.CommitmentChain.evidence_checks/2` of `Truestamp.Verify.Chains.Bitcoin`
+  to pass before `commitment/2`. The
+  rule compares the block at the entry's height with the `header_hash` and `total_txs` the
+  entry carries, and nothing more, so alone it passes an entry whose transaction commits
+  another epoch, or none;
+- a Stellar commitment entry needs no such step: its rule computes the epoch hash from
+  `epoch.record` and compares the memo with it;
+- for an entropy object, recompute its `entropy_hash` as DERIVE does,
+  `Truestamp.Verify.Hash.hash_hex(:entropy_hash, object)`, and compare it with the
+  `entropy_hash` that names the object; SOURCES reads only an object whose hash matched.
+
+```elixir
+alias Truestamp.Verify.Check
+
+Enum.all?(
+  Chains.Bitcoin.evidence_checks(["commitments", "bitcoin"], entry),
+  &match?(%Check{outcome: :pass}, &1)
+)
+```
+
+For a value that passes them, the rule gives a `Truestamp.Verify.Online.Rule.Outcome`: the
+status, the code and the candidate a run gives that source for that entry, and every read
+made, in `values`. The rules are `commitment/2` of `Truestamp.Verify.Chains.Stellar` and
+`Truestamp.Verify.Chains.Bitcoin` for a commitment entry (`top_level?: false` for one under
+`signing_key_event`), `genesis/2` of `Truestamp.Verify.Chains.Bitcoin` for `genesis.bitcoin`
+(`top_level?: false`), and `entropy/2` of each source for an entropy object (`network: nil`
+for NIST).
 
 ## Replay files
 

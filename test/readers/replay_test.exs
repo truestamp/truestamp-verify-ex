@@ -79,9 +79,14 @@ defmodule Truestamp.Verify.Readers.ReplayTest do
   test "answers a read it holds, and a read it does not hold is unreachable" do
     {Replay, state} = Replay.new!(@replay, fetched_at: ~U[2026-01-01 00:00:00Z])
 
-    assert {:ok, %{"height" => _},
-            %{source: "replay", cached: false, fetched_at: ~U[2026-01-01 00:00:00Z]}} =
+    assert {:ok, %{"height" => _}, meta} =
              Replay.read(state, "replay", "regtest", :bitcoin_tip, %{})
+
+    # Nothing it answers is cached, and no meta carries a tip_height.
+    assert meta == %{source: "replay", cached: false, fetched_at: ~U[2026-01-01 00:00:00Z]}
+
+    assert {:ok, %{"hash" => _}, ^meta} =
+             Replay.read(state, "replay", "regtest", :bitcoin_block_at_height, %{"height" => 222})
 
     assert {:error, {:not_in_replay, %{"kind" => "bitcoin_tip", "network" => "mainnet"}}} =
              Replay.read(state, "replay", "mainnet", :bitcoin_tip, %{})

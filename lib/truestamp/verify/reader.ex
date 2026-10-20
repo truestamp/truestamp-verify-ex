@@ -42,30 +42,56 @@ defmodule Truestamp.Verify.Reader do
   A reader owns its transport: its URLs, timeouts, retries, rate limits, budgets and any
   cache. The engine owns every judgement of section 10.4, the same for every reader: it
   checks each field's class, refuses a cached answer where the spec requires a live read
-  (identity, the Stellar root, the Bitcoin tip, and every not-found answer) and to a
-  best-chain Bitcoin block at a height (which section 10.4 allows from a cache only when it
-  was read while the source's tip was at least that height plus BITCOIN_FINALITY, a fact no
-  answer carries), keeps one answer
-  per read for the whole run, enforces the run's deadline, and turns a reader that raises,
-  throws or exits into an unreachable read. A reader need not, and should not, judge an
-  answer against the proof.
+  (identity, the Stellar root, the Bitcoin tip, and every not-found answer) and a cached
+  best-chain Bitcoin block at a height read under a tip that was not final (see "Caches"),
+  keeps one answer per read for the whole run, enforces the run's deadline, and turns a
+  reader that raises, throws or exits into an unreachable read. A reader need not, and
+  should not, judge an answer against the proof. The same holds outside a run, for one
+  entry judged through `Truestamp.Verify.Online.Rule.new/2` over a reader.
+
+  ## Caches
+
+  A reader that answers from a cache says so with `cached: true` in the answer's meta, and
+  the engine decides whether the answer stands (section 10.4):
+
+  | Read | A cached found answer |
+  |---|---|
+  | `:stellar_identity`, `:bitcoin_identity`, `:stellar_root`, `:bitcoin_tip` | refused: always read live |
+  | `:bitcoin_block_at_height`, at height g | kept when its meta carries `tip_height`, the INT height of the source's tip when the block was read, of at least g + BITCOIN_FINALITY (10); refused with no `tip_height`, or a shorter one |
+  | `:stellar_transaction`, `:stellar_ledger`, `:bitcoin_block`, `:nist_pulse` | kept: a read by hash, by ledger sequence or by pulse index cannot change |
+
+  A not-found answer marked cached is refused for every read. A refused answer is an
+  unreachable read, so a reader whose cache cannot give a fact the engine needs should read
+  live instead. A reader's cache answers a read of a source only with an answer that same
+  source gave, on that chain and network (section 10.4): the engine cannot tell where a
+  cached answer came from, so this rule is the reader's to keep. `tip_height` is the reader's report of what its cache recorded, a transport
+  fact; the engine compares it with g. The readers this library ships cache nothing: every
+  answer of `Truestamp.Verify.Readers.HTTP` and `Truestamp.Verify.Readers.Replay` is
+  `cached: false`, with no `tip_height`.
 
   ## Processes
 
-  A read may run in a process other than the one that called `Truestamp.Verify.verify/2`:
+  A read may run in a process other than the one that asked for it. In a run, the process
+  that called `Truestamp.Verify.verify/2`:
 
   - step 0's identity reads run at once, each in a task of its own, in every online run;
   - in a run with a deadline (the `:deadline` option), every read runs in a task that the
     deadline can cut short.
 
-  Each such task is started with `Task` by the run's process, or by a task it started, so
-  its `$callers` holds the run's process and the processes that started it. Whatever finds
-  its owner through `$callers` reaches the read: `Req.Test` stubs, Mox expectations and
-  NimbleOwnership allowances among them, so a test's stubs apply. Nothing else of the
+  Outside a run, through a context of `Truestamp.Verify.Online.Rule.new/2` over a reader or
+  through `Truestamp.Verify.Online.Rule.confirm_identity/2`, a read runs in the calling
+  process when the call gives no `:deadline`, and in a task the deadline can cut short when
+  it gives one.
+
+  Each such task is started with `Task` by the calling process, or by a task it started, so
+  its `$callers` holds the calling process and the processes that started it. Whatever
+  finds its owner through `$callers` reaches the read: `Req.Test` stubs, Mox expectations
+  and NimbleOwnership allowances among them, so a test's stubs apply. Nothing else of the
   calling process does: its process dictionary, its Logger metadata and its mailbox stay
   with it. A reader that needs such state carries it in its `state`, or finds it through
-  `$callers`. The engine judges every answer in the run's process, in the order of section
-  10.2, so reads made at once change no outcome and no row.
+  `$callers`, and so reads the same in a task and out of one. The engine judges every
+  answer in the calling process, in the order of section 10.2, so reads made at once change
+  no outcome and no row.
   """
 
   alias Truestamp.Verify.Online.Answer
@@ -94,7 +120,8 @@ defmodule Truestamp.Verify.Reader do
   - `{:error, :not_found, meta}`: the source answered that it holds no such object;
   - `{:error, reason}`: no usable answer.
 
-  `meta` is `%{source: String.t(), fetched_at: DateTime.t(), cached: boolean()}`.
+  `meta` is `%{source: String.t(), fetched_at: DateTime.t(), cached: boolean()}`, with
+  `tip_height` beside them for a cached `:bitcoin_block_at_height` (see "Caches").
   """
   @callback read(
               state :: term(),

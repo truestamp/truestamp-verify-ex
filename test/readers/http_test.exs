@@ -188,7 +188,9 @@ defmodule Truestamp.Verify.Readers.HTTPTest do
       end)
 
       Req.Test.stub(__MODULE__.Nist, fn conn ->
-        ["", "chain", chain, "pulse", pulse] = String.split(conn.request_path, "/")
+        # The Beacon's path, under its base URL's own: .../chain/C/pulse/P.
+        [_base, tail] = String.split(conn.request_path, "/chain/")
+        [chain, "pulse", pulse] = String.split(tail, "/")
 
         params = %{
           "chainIndex" => String.to_integer(chain),
@@ -198,7 +200,26 @@ defmodule Truestamp.Verify.Readers.HTTPTest do
         Req.Test.json(conn, %{"pulse" => Map.merge(params, answer.("nist_pulse", params))})
       end)
 
-      :ok
+      %{found: found}
+    end
+
+    defp stubbed do
+      HTTP.new(
+        stellar: %{
+          "testnet" =>
+            {Horizon,
+             base_url: "https://horizon.test", req_options: [plug: {Req.Test, __MODULE__.Stellar}]}
+        },
+        bitcoin: %{
+          "regtest" =>
+            {BitcoinCore,
+             base_url: "http://node.test",
+             user: "u",
+             password: "p",
+             req_options: [plug: {Req.Test, __MODULE__.Bitcoin}]}
+        },
+        nist: {NistBeacon, req_options: [plug: {Req.Test, __MODULE__.Nist}]}
+      )
     end
 
     defp header(answer, found, hash) do
@@ -225,24 +246,7 @@ defmodule Truestamp.Verify.Readers.HTTPTest do
     end
 
     test "Truestamp's own verifier gives verified, with both edges, through the HTTP reader" do
-      reader =
-        HTTP.new(
-          stellar: %{
-            "testnet" =>
-              {Horizon,
-               base_url: "https://horizon.test",
-               req_options: [plug: {Req.Test, __MODULE__.Stellar}]}
-          },
-          bitcoin: %{
-            "regtest" =>
-              {BitcoinCore,
-               base_url: "http://node.test",
-               user: "u",
-               password: "p",
-               req_options: [plug: {Req.Test, __MODULE__.Bitcoin}]}
-          },
-          nist: {NistBeacon, req_options: [plug: {Req.Test, __MODULE__.Nist}]}
-        )
+      reader = stubbed()
 
       pins = %{
         commitment: %{"bitcoin" => "regtest", "stellar" => "testnet"},
@@ -263,6 +267,46 @@ defmodule Truestamp.Verify.Readers.HTTPTest do
       assert report.label == :verified, inspect(Enum.reject(report.rows, &(&1.status == :pass)))
       assert report.submitted_before.source == "horizon https://horizon.test"
       assert report.submitted_after != nil
+
+      # Every chain and source row passes, NIST's among them, and nothing was read from a
+      # cache: every outcome, every read and both edges are cached false.
+      online = for %{step: step} = row <- report.rows, step in [:chain, :sources], do: row
+
+      assert Enum.sort(for row <- online, do: {row.part, row.status}) == [
+               {"/commitments/bitcoin", :pass},
+               {"/commitments/stellar", :pass},
+               {"/witnesses/entropy_bitcoin", :pass},
+               {"/witnesses/entropy_nist", :pass},
+               {"/witnesses/entropy_stellar", :pass}
+             ]
+
+      outcomes = for row <- online, outcome <- row.values["outcomes"], do: outcome
+      assert length(outcomes) == length(online)
+      assert Enum.all?(outcomes, &(&1["cached"] == false))
+
+      assert Enum.all?(
+               for(outcome <- outcomes, read <- outcome["reads"], do: read["cached"] == false)
+             )
+
+      assert {report.submitted_before.cached, report.submitted_after.cached} == {false, false}
+    end
+
+    test "every answer it gives is live, its meta no more than its source, time and cached false",
+         %{found: found} do
+      {HTTP, state} = stubbed()
+
+      for {read, value} <- found do
+        chain = read["kind"] |> String.split("_", parts: 2) |> hd()
+        network = if chain == "nist", do: nil, else: read["network"]
+        {:ok, [id], :first} = HTTP.sources(state, chain, network)
+        kind = String.to_existing_atom(read["kind"])
+        params = Map.drop(read, ["kind", "network"])
+
+        assert {:ok, fields, meta} = HTTP.read(state, id, network, kind, params)
+        assert Map.take(value, Map.keys(fields)) == fields
+        assert %{source: ^id, cached: false, fetched_at: %DateTime{}} = meta
+        assert Enum.sort(Map.keys(meta)) == [:cached, :fetched_at, :source], inspect(read)
+      end
     end
   end
 end

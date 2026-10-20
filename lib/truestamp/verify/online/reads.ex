@@ -3,31 +3,29 @@
 
 defmodule Truestamp.Verify.Online.Reads do
   @moduledoc false
-  # The engine's side of every read (SPEC.md section 10.4), the same for every reader:
+  # The engine's side of every read (SPEC.md section 10.4), the same for every reader, in a
+  # whole run and in a rule context built over a reader (`Truestamp.Verify.Online.Rule.new/2`):
   #
   # - a reader's answer is normalized to `Truestamp.Verify.Online.Answer`'s three shapes,
   #   and anything else, a raise, a throw or an exit among them, is an unreachable read,
   #   never a fault that could drop a step's rows;
   # - an answer marked cached is refused where the spec requires a live read: every
   #   not-found answer, and every found answer of an identity, the Stellar root or the
-  #   Bitcoin tip; and every best-chain Bitcoin block at a height, which the spec lets come
-  #   from a cache only when it was read while the source's tip was at least that height
-  #   plus BITCOIN_FINALITY, a fact an answer does not carry;
+  #   Bitcoin tip;
+  # - a cached best-chain Bitcoin block at a height g is kept only when its meta carries
+  #   `tip_height`, the source's tip it was read under, of at least g + BITCOIN_FINALITY,
+  #   and refused otherwise;
   # - one answer per read for the whole run (the spec allows it), kept in the run;
   # - a deadline over the whole online run: a read past it is unreachable.
 
   alias Truestamp.Verify.Online.Answer
+  alias Truestamp.Verify.Spec.Constants
 
-  # Reads whose answer can change, or that the spec requires live (section 10.4). A cached
-  # block at a height would be allowed by the spec only with the tip it was read under, which
-  # the engine cannot check, so it takes none.
-  @always_live [
-    :stellar_identity,
-    :bitcoin_identity,
-    :stellar_root,
-    :bitcoin_tip,
-    :bitcoin_block_at_height
-  ]
+  # Reads whose answer can change, or that the spec requires live (section 10.4).
+  @always_live [:stellar_identity, :bitcoin_identity, :stellar_root, :bitcoin_tip]
+
+  @finality Constants.bitcoin_finality()
+  @max_integer Constants.max_integer()
 
   @typedoc "The key of one read in a run's memo."
   @type key :: {term(), String.t() | nil, atom(), map()}
@@ -60,7 +58,7 @@ defmodule Truestamp.Verify.Online.Reads do
       timeout ->
         {module, state}
         |> call(source, network, kind, params, timeout)
-        |> normalize(kind)
+        |> normalize(kind, params)
     end
   end
 
@@ -97,17 +95,20 @@ defmodule Truestamp.Verify.Online.Reads do
   defp describe(_kind, _reason), do: nil
 
   @doc false
-  # A reader's answer to `kind`, normalized, with the live-read rules applied.
-  @spec normalize(term(), atom()) :: Answer.t()
-  def normalize({:ok, fields, meta}, kind) when is_map(fields) do
+  # A reader's answer to the read of `kind` with `params`, normalized, with the live-read
+  # rules applied.
+  @spec normalize(term(), atom(), map()) :: Answer.t()
+  def normalize({:ok, fields, meta}, kind, params) when is_map(fields) do
     cond do
       not meta?(meta) -> {:unreachable, :malformed_answer}
-      meta.cached and kind in @always_live -> {:unreachable, :cached_live_read}
+      not meta.cached -> {:found, fields, meta}
+      kind in @always_live -> {:unreachable, :cached_live_read}
+      kind == :bitcoin_block_at_height -> final_block(fields, meta, params)
       true -> {:found, fields, meta}
     end
   end
 
-  def normalize({:error, :not_found, meta}, _kind) do
+  def normalize({:error, :not_found, meta}, _kind, _params) do
     cond do
       not meta?(meta) -> {:unreachable, :malformed_answer}
       meta.cached -> {:unreachable, :cached_not_found}
@@ -115,8 +116,17 @@ defmodule Truestamp.Verify.Online.Reads do
     end
   end
 
-  def normalize({:error, reason}, _kind), do: {:unreachable, reason}
-  def normalize(_other, _kind), do: {:unreachable, :malformed_answer}
+  def normalize({:error, reason}, _kind, _params), do: {:unreachable, reason}
+  def normalize(_other, _kind, _params), do: {:unreachable, :malformed_answer}
+
+  # A cached best-chain block at height g: kept when it was read while the source's tip was
+  # at least g + BITCOIN_FINALITY, as its meta's `tip_height`, an INT, says; refused when the
+  # meta carries no such tip, or a shorter one.
+  defp final_block(fields, %{tip_height: tip} = meta, %{"height" => height})
+       when tip in 0..@max_integer and tip >= height + @finality,
+       do: {:found, fields, meta}
+
+  defp final_block(_fields, _meta, _params), do: {:unreachable, :cached_not_final}
 
   defp meta?(%{source: source, fetched_at: %DateTime{}, cached: cached})
        when is_binary(source) and is_boolean(cached),

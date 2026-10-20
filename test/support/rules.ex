@@ -4,24 +4,41 @@
 defmodule Truestamp.Verify.Test.Rules do
   @moduledoc """
   Helpers for the tests of the rules of SPEC.md section 10.4: a rule context whose reads
-  answer from a map of `{kind, params}` to an answer, already in the engine's shape
+  answer from a map of `{kind, params}` to an answer, written in the engine's shape
   (`Truestamp.Verify.Online.Answer`); a read it does not hold is unreachable.
+
+  The context is the one a caller outside a run builds: `Truestamp.Verify.Online.Rule.new/2`
+  over a reader (`Truestamp.Verify.Test.FakeReader`) whose answers are these, written back
+  in a reader's shapes, so every rule test reads through the engine's side of every read.
   """
 
   alias Truestamp.Verify.Online.Rule
+  alias Truestamp.Verify.Test.FakeReader
 
-  @meta %{source: "test", fetched_at: ~U[2026-10-16 12:00:00Z], cached: false}
+  @source "test"
+  @network "test"
+  @meta %{source: @source, fetched_at: ~U[2026-10-16 12:00:00Z], cached: false}
 
   @doc "A context answering from `answers`."
   @spec context(map(), keyword()) :: Rule.context()
   def context(answers, options \\ []) do
-    read = fn kind, params -> Map.get(answers, {kind, params}, {:unreachable, :not_scripted}) end
+    scripted =
+      Map.new(answers, fn {{kind, params}, answer} ->
+        {{@source, @network, kind, params}, reader_answer(answer)}
+      end)
 
-    Rule.new(read,
+    Rule.new(FakeReader.new(scripted),
+      source: @source,
+      network: @network,
       part: Keyword.get(options, :part, "/part"),
       top_level?: Keyword.get(options, :top_level?, true)
     )
   end
+
+  # An answer in the engine's shape, as a reader gives it.
+  defp reader_answer({:found, fields, meta}), do: {:ok, fields, meta}
+  defp reader_answer({:not_found, meta}), do: {:error, :not_found, meta}
+  defp reader_answer({:unreachable, reason}), do: {:error, reason}
 
   @doc "A found answer with `fields`."
   @spec found(map()) :: tuple()

@@ -15,7 +15,9 @@ defmodule Truestamp.Verify.Online.Answer do
 
   `meta` is `%{source: String.t(), fetched_at: DateTime.t(), cached: boolean()}`: where the
   answer came from, when it was read by the verifier's clock, and whether it came from a
-  cache (section 10.5).
+  cache (section 10.5). A cached best-chain Bitcoin block at a height also carries
+  `tip_height`, the height of the source's tip when the block was read
+  (`Truestamp.Verify.Reader`, "Caches"); the engine reads it on no other answer.
 
   **Fields.** A found answer holds the fields of its kind of read, each in its class
   (section 13.2's table). The rules read each field through `field/3`, which gives
@@ -32,8 +34,16 @@ defmodule Truestamp.Verify.Online.Answer do
   alias Truestamp.Verify.Instant
   alias Truestamp.Verify.Spec.Constants
 
-  @typedoc "Where an answer came from (section 10.5)."
-  @type meta :: %{source: String.t(), fetched_at: DateTime.t(), cached: boolean()}
+  @typedoc """
+  Where an answer came from (section 10.5), and for a cached block at a height, the tip it
+  was read under.
+  """
+  @type meta :: %{
+          required(:source) => String.t(),
+          required(:fetched_at) => DateTime.t(),
+          required(:cached) => boolean(),
+          optional(:tip_height) => non_neg_integer()
+        }
 
   @type t ::
           {:found, map(), meta()}

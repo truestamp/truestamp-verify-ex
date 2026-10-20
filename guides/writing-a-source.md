@@ -80,9 +80,19 @@ reader need not guard against its own failures.
 
 A read can run in a task rather than in the caller's process: step 0's identity reads run at
 once, each in a task, and a run with a deadline makes every read in a task the deadline can
-cut short. Each task carries the caller in its `$callers`, so `Req.Test` stubs and other
-per-process ownership reach it, but the caller's process dictionary does not; keep what a
-read needs in the reader's state (`Truestamp.Verify.Reader`, "Processes").
+cut short. Outside a run, a read through `Truestamp.Verify.Online.Rule.new/2` or
+`Truestamp.Verify.Online.Rule.confirm_identity/2` runs in the calling process when the call
+gives no `:deadline`, and in a task the deadline can cut short when it gives one. Each task
+carries the caller in its `$callers`, so `Req.Test` stubs and other per-process ownership
+reach it, but the caller's process dictionary does not; keep what a read needs in the
+reader's state (`Truestamp.Verify.Reader`, "Processes").
+
+A reader that answers from a cache marks each such answer `cached: true`; the engine then
+refuses it where the spec requires a live read. A cached best-chain Bitcoin block at a
+height stands only when the answer's meta also carries `tip_height`, the source's tip when
+the block was read, of at least that height plus 10, so a cache keeps that tip beside each
+block (`Truestamp.Verify.Reader`, "Caches"). The same reader serves a whole run and one
+entry judged outside a run (`Truestamp.Verify.Online.Rule.new/2`).
 
 `Truestamp.Verify.Readers.Replay` is a complete, short reader, and a good model.
 
