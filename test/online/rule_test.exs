@@ -18,7 +18,7 @@ defmodule Truestamp.Verify.Online.RuleTest do
   alias Truestamp.Verify.Chains.{Bitcoin, Nist, Stellar}
   alias Truestamp.Verify.{Config, Conformance, Edge, Hash, JSON, Keyring, Layout, Report, Row}
   alias Truestamp.Verify.JSON.Pointer
-  alias Truestamp.Verify.Online.Rule
+  alias Truestamp.Verify.Online.{Answer, Rule}
   alias Truestamp.Verify.Test.{Cases, FakeReader, Verification}
 
   @passphrase "Test SDF Network ; September 2015"
@@ -54,7 +54,7 @@ defmodule Truestamp.Verify.Online.RuleTest do
         )
 
       assert {cached.status, cached.code} == {:skip, :source_unreachable}
-      assert reasons(cached) == ["cached_not_found"]
+      assert reasons(cached) == [Answer.describe(:cached_not_found)]
 
       live =
         Stellar.commitment(
@@ -80,14 +80,14 @@ defmodule Truestamp.Verify.Online.RuleTest do
         )
 
       assert {outcome.status, outcome.code} == {:skip, :source_unreachable}
-      assert reasons(outcome) == [nil, "cached_live_read"]
+      assert reasons(outcome) == [nil, Answer.describe(:cached_live_read)]
     end
 
     test "a reader that raises, throws or exits gives an unreachable read, never a raise" do
-      for {fault, kind} <- [
-            {fn -> raise "boom" end, "RuntimeError"},
-            {fn -> throw(:boom) end, nil},
-            {fn -> exit(:boom) end, nil}
+      for {fault, why} <- [
+            {fn -> raise "boom" end, "the reader raised RuntimeError"},
+            {fn -> throw(:boom) end, "the reader threw"},
+            {fn -> exit(:boom) end, "the reader exited"}
           ],
           deadline <- [nil, 5_000] do
         outcome =
@@ -98,15 +98,14 @@ defmodule Truestamp.Verify.Online.RuleTest do
 
         assert {outcome.status, outcome.code} == {:skip, :source_unreachable}
         assert [%{"outcome" => "unreachable", "reason" => reason}] = outcome.values["reads"]
-        assert reason =~ "reader_fault"
-        if kind, do: assert(reason =~ kind)
+        assert reason == why
       end
     end
 
     test "an answer in no shape is unreachable" do
       outcome = Stellar.commitment(over(%{@transaction_read => {:ok, :what}}), @stellar_entry)
       assert {outcome.status, outcome.code} == {:skip, :source_unreachable}
-      assert reasons(outcome) == ["malformed_answer"]
+      assert reasons(outcome) == [Answer.describe(:malformed_answer)]
     end
 
     test "a deadline that ends a read leaves it unreachable, and a spent one reads nothing" do
@@ -118,7 +117,7 @@ defmodule Truestamp.Verify.Online.RuleTest do
 
       assert System.monotonic_time(:millisecond) - started < 1_500
       assert {outcome.status, outcome.code} == {:skip, :source_unreachable}
-      assert reasons(outcome) == ["deadline"]
+      assert reasons(outcome) == [Answer.describe(:deadline)]
 
       counter = :counters.new(1, [])
 
@@ -130,7 +129,7 @@ defmodule Truestamp.Verify.Online.RuleTest do
       outcome =
         Stellar.commitment(over(%{@transaction_read => counted}, deadline: 0), @stellar_entry)
 
-      assert reasons(outcome) == ["deadline"]
+      assert reasons(outcome) == [Answer.describe(:deadline)]
       assert :counters.get(counter, 1) == 0
     end
 
@@ -292,13 +291,13 @@ defmodule Truestamp.Verify.Online.RuleTest do
     test "read under a tip final for h but not for h + 10, the candidate read is refused" do
       outcome = bitcoin(tip_height: @height + 19)
       assert {outcome.status, outcome.code} == {:skip, :source_unreachable}
-      assert reasons(outcome) == [nil, nil, "cached_not_final"]
+      assert reasons(outcome) == [nil, nil, Answer.describe(:cached_not_final)]
     end
 
     test "with no tip, the block at h is refused" do
       outcome = bitcoin([])
       assert {outcome.status, outcome.code} == {:skip, :source_unreachable}
-      assert reasons(outcome) == [nil, "cached_not_final"]
+      assert reasons(outcome) == [nil, Answer.describe(:cached_not_final)]
     end
   end
 
@@ -407,7 +406,7 @@ defmodule Truestamp.Verify.Online.RuleTest do
       assert Rule.unconfirmed(:identity_not_found) == %Rule.Outcome{
                status: :skip,
                code: :source_unreachable,
-               values: %{"identity" => "identity_not_found"}
+               values: %{"identity" => "the identity read answered not found"}
              }
 
       replay = Verification.path("vectors/corpus/replay/window-established.json")

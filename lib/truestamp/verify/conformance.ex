@@ -25,11 +25,12 @@ defmodule Truestamp.Verify.Conformance do
   | `sources` | the several sources of the networks it names, each answering from the replay records that name it, under its policy |
 
   **What is compared** (section 13.1): for a bare rejection, `code`, and `sub_reason` when
-  the code has one; otherwise the report's `label` and every row as
-  `[code, part, status, step]`, in order; for a case whose expected output names a trace,
-  the trace rows, each without `inputs`; and for an online case, each edge's instant and
-  basis, or its absence, instants compared as instants. Messages and `values` are never
-  compared.
+  the code has one; otherwise the report's `label`, its `code` when the case's expected
+  output gives one, and every row as `[code, part, status, step]`, in order; for a case
+  whose expected output names a trace, the trace rows, each without `inputs`; and for an
+  online case, each edge's instant and basis, or its absence, instants compared as
+  instants. Messages and `values` are never compared. A bare rejection's expected output is
+  the one with no `label` (section 13.2).
   """
 
   alias Truestamp.Verify
@@ -217,9 +218,24 @@ defmodule Truestamp.Verify.Conformance do
   end
 
   @doc """
+  The options of `output/2` that `kase` asks for: `trace?` when its expected output names a
+  trace, `online?` when it is online, and `code?` when its expected output gives a code,
+  which for a report is the run's code (section 13.2).
+  """
+  @spec output_options(kase()) :: keyword()
+  def output_options(%{"expected" => expected} = kase) do
+    [
+      trace?: Map.has_key?(expected, "trace"),
+      online?: online?(kase),
+      code?: Map.has_key?(expected, "code")
+    ]
+  end
+
+  @doc """
   What section 13.1 compares of a result: a bare rejection's `code` and `sub_reason`, or a
-  report's `label` and reduced `rows`, its `trace` rows without `inputs` when `trace?`, and
-  its edges when `online?`; an `error` for a result that is neither.
+  report's `label` and reduced `rows`, its `code` when `code?` and the report has one, its
+  `trace` rows without `inputs` when `trace?`, and its edges when `online?`; an `error` for
+  a result that is neither. `output_options/1` gives the options a case asks for.
   """
   @spec output(Verify.result() | {:error, String.t()}, keyword()) :: map()
   def output(result, options \\ [])
@@ -231,6 +247,11 @@ defmodule Truestamp.Verify.Conformance do
 
   def output({:ok, %Report{} = report}, options) do
     reduced = Report.reduce(report, Keyword.get(options, :trace?, false))
+
+    reduced =
+      if Keyword.get(options, :code?, false) and report.code != nil,
+        do: Map.put(reduced, "code", Atom.to_string(report.code)),
+        else: reduced
 
     if Keyword.get(options, :online?, false),
       do: reduced,
@@ -373,15 +394,14 @@ defmodule Truestamp.Verify.Conformance do
   @doc """
   The output of `mix truestamp.conformance CASES_JSON`: one JSON document, written with JCS
   and a final line feed, an array with one entry per case in the file's order, each
-  `{id, output}`, where `output` is what `output/2` gives. Every path a case holds is read
-  relative to the directory that holds the cases file.
+  `{id, output}`, where `output` is what `output/2` gives under `output_options/1`. Every
+  path a case holds is read relative to the directory that holds the cases file.
   """
   @spec document([kase()], Path.t()) :: binary()
   def document(cases, vectors) do
     entries =
-      for %{"id" => id, "expected" => expected} = kase <- cases do
-        options = [trace?: Map.has_key?(expected, "trace"), online?: online?(kase)]
-        %{"id" => id, "output" => kase |> run(vectors) |> output(options)}
+      for %{"id" => id} = kase <- cases do
+        %{"id" => id, "output" => kase |> run(vectors) |> output(output_options(kase))}
       end
 
     JCS.encode(entries) <> "\n"

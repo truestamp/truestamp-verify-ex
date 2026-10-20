@@ -30,12 +30,27 @@ SPDX-License-Identifier: Apache-2.0
 - A cached best-chain Bitcoin block at a height stands when its meta's `tip_height` is at
   least that height plus BITCOIN_FINALITY, as SPEC.md 10.4 allows; one with no tip, or a
   shorter one, is refused.
-- Follows truestamp-verification at 28a87ae53ee05632236af2f8c0d5819c8479a46e, and passes
-  its 481 cases (394 offline, 87 online): `@verification_ref`, `priv/spec.source` and the
-  walkthrough's vectors move to that commit. The docs follow its text: a `txoutproof`'s
-  walk reaches every flag octet, the bits after the last one used zero; an answer is judged
-  on the fields its rule reads at that point; a conformance case names no keyring origin.
+- Follows truestamp-verification at 51dbf0343b06cb52d8531dc2fb18f2f728010afc, and passes
+  its 482 cases (395 offline, 87 online): `@verification_ref`, `priv/spec.source` and the
+  walkthrough's vectors move to that commit. `Conformance.output/2` gives a report's code
+  where a case's expected output gives one (`Conformance.output_options/1`), and
+  `Conformance.compare/3` compares it. The docs follow its text: a `txoutproof`'s walk
+  reaches every flag octet, the bits after the last one used zero; an answer is judged on
+  the fields its rule reads at that point; a conformance case names no keyring origin.
 - `Readers.Replay` names a network's one source `:replay`, an atom no source name can
   spell, so a source a case names `"replay"` reads only the records that name it.
 - `Readers.HTTP.new/1` takes NIST's one source with any number of options, and still
   refuses two NIST sources.
+- Esplora's and Bitcoin Core's best-chain block at a height whose second call gives no
+  usable answer or not found is found with the first call's hash alone, as SPEC.md 10.4
+  says, and with that call's meta; an answer that breaks J2 to J6 in any member, a
+  `difficulty` of 2^53 or more among them, is no usable answer.
+- A row's `cached` is false, never null, for an outcome or a read with no answer, and its
+  `fetched_at` the time the read was tried, by the verifier's clock; an outcome with no
+  candidate is settled by the last read made, whatever it answered, and by the identity
+  read only for a source asked nothing else. An unreachable reason is an ASCII128 that says
+  why, such as `HTTP 503`, never an Elixir term, in each read and in each identity note.
+- A run keeps no unreachable answer, as SPEC.md 10.4 says: a later row that needs the same
+  read reads again, and uses that answer.
+- `Readers.Replay` counts as a source only a named source whose identity read the file
+  holds.

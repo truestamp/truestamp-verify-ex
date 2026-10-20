@@ -21,15 +21,23 @@ defmodule Truestamp.Verify.Readers.Replay do
     name, `"replay"` among them, can spell it, and a named source never reads the records
     of a network's one source.
   - A network given several sources with the `:sources` option of `new/2`, as a case's
-    `sources` member gives them (section 13.2), has those sources, in their order and under
-    their policy, each answering from the records that name it.
+    `sources` member gives them (section 13.2), has those of them whose identity read the
+    file holds, in their order and under their policy, each answering from the records that
+    name it: the file stands only as a named source whose identity read it holds. A network
+    none of whose named sources has an identity read in the file has no source.
   - A read the file does not hold has no answer: it is unreachable, with the reason
     `{:not_in_replay, read}`, so the test that makes it fails on its rows.
+  - An unreachable record's `reason`, an ASCII128 that says why, is the read's reason, as
+    `{:unreachable, reason}`, and a row writes it as the record gives it
+    (`Truestamp.Verify.Online.Answer.describe/1`).
 
   Every answer is stamped with its source's name (`"replay"` for a network's one source),
-  `cached: false`, and the `fetched_at` given to `new/2`, the same for every read, so two
-  runs with one reader give equal reports. A replay file stands for live reads, so no answer
-  is marked cached, and none carries a `tip_height` (`Truestamp.Verify.Reader`, "Caches").
+  `cached: false`, and the `fetched_at` given to `new/2`, the same for every answer, so two
+  runs with one reader give equal reports, but for the `fetched_at` of a read that gave no
+  answer, and of an outcome such a read settled, which is when that read was tried, by the
+  verifier's clock (SPEC.md section 10.4, what a row read). A replay file stands for live
+  reads, so no answer is marked cached, and none carries a `tip_height`
+  (`Truestamp.Verify.Reader`, "Caches").
 
   A case's `config` names no keyring origin, so the keyring read a case makes is of
   www.truestamp.com (section 13.2), which `Truestamp.Verify.KeyringSources.Replay` answers
@@ -122,24 +130,31 @@ defmodule Truestamp.Verify.Readers.Replay do
   def sources(%__MODULE__{}, "nist", nil), do: {:ok, [@source], :first}
 
   def sources(%__MODULE__{reads: reads, named: named}, chain, network) do
-    case named |> Map.get(chain, %{}) |> Map.get(network) do
-      {policy, [_ | _] = names} ->
-        {:ok, names, policy}
+    identity = %{"kind" => chain <> "_identity", "network" => network}
 
-      nil ->
-        if Map.has_key?(reads, {%{"kind" => chain <> "_identity", "network" => network}, nil}),
-          do: {:ok, [@source], :first},
-          else: {:error, :no_source}
+    {policy, ids} =
+      case named |> Map.get(chain, %{}) |> Map.get(network) do
+        {policy, names} -> {policy, names}
+        nil -> {:first, [@source]}
+      end
+
+    case Enum.filter(ids, &Map.has_key?(reads, {identity, record_source(&1)})) do
+      [] -> {:error, :no_source}
+      held -> {:ok, held, policy}
     end
   end
+
+  # The `source` of the records a source answers from: none for a network's one source.
+  defp record_source(@source), do: nil
+  defp record_source(name), do: name
 
   @impl true
   def read(%__MODULE__{reads: reads, fetched_at: fetched_at}, source, network, kind, params) do
     read = key(network, kind, params)
-    {named, name} = if source == @source, do: {nil, "replay"}, else: {source, source}
+    name = if source == @source, do: "replay", else: source
     meta = %{source: name, fetched_at: fetched_at, cached: false}
 
-    case Map.fetch(reads, {read, named}) do
+    case Map.fetch(reads, {read, record_source(source)}) do
       {:ok, %{"outcome" => "found", "value" => value}} -> {:ok, value, meta}
       {:ok, %{"outcome" => "not_found"}} -> {:error, :not_found, meta}
       {:ok, %{"outcome" => "unreachable"} = answer} -> {:error, {:unreachable, answer["reason"]}}

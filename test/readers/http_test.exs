@@ -332,4 +332,104 @@ defmodule Truestamp.Verify.Readers.HTTPTest do
       end
     end
   end
+
+  describe "a best-chain block at a height whose second call fails (SPEC.md 10.4, Answers)" do
+    # The read keeps the hash its first call gave, so the rule is judged on it: a
+    # genesis.bitcoin whose hash matches passes and one whose hash differs fails, and a
+    # commitment entry whose hash matches is skip source_unreachable, its transaction count
+    # not given. The tip is final for both heights; the block call answers HTTP 503.
+    {:ok, document} =
+      "vectors/positive/item.proof.json"
+      |> Verification.path()
+      |> File.read!()
+      |> Verify.JSON.parse()
+
+    @entry document["proof"]["commitments"]["bitcoin"]
+    @genesis_hash String.duplicate("0a", 32)
+
+    defp hash_at(0), do: @genesis_hash
+    defp hash_at(_height), do: @entry["header_hash"]
+
+    defp esplora_reader do
+      Req.Test.stub(__MODULE__.TwoCalls, fn conn ->
+        case conn.request_path do
+          "/blocks/tip/height" ->
+            Plug.Conn.send_resp(conn, 200, Integer.to_string(@entry["height"] + 10))
+
+          "/block-height/" <> height ->
+            Plug.Conn.send_resp(conn, 200, hash_at(String.to_integer(height)))
+
+          "/block/" <> _hash ->
+            Plug.Conn.send_resp(conn, 503, "busy")
+        end
+      end)
+
+      {:bitcoin,
+       {Esplora,
+        base_url: "https://esplora.test", req_options: [plug: {Req.Test, __MODULE__.TwoCalls}]}}
+    end
+
+    defp core_reader do
+      Req.Test.stub(__MODULE__.TwoCalls, fn conn ->
+        {:ok, body, conn} = Plug.Conn.read_body(conn)
+        %{"method" => method, "params" => params} = elem(Verify.JSON.parse(body), 1)
+
+        case {method, params} do
+          {"getblockcount", []} ->
+            Req.Test.json(conn, %{"result" => @entry["height"] + 10, "error" => nil})
+
+          {"getblockhash", [height]} ->
+            Req.Test.json(conn, %{"result" => hash_at(height), "error" => nil})
+
+          {"getblockheader", _params} ->
+            Plug.Conn.send_resp(conn, 503, "busy")
+        end
+      end)
+
+      {:bitcoin,
+       {BitcoinCore,
+        base_url: "http://node.test",
+        user: "u",
+        password: "p",
+        req_options: [plug: {Req.Test, __MODULE__.TwoCalls}]}}
+    end
+
+    defp judged({:bitcoin, source}) do
+      reader = HTTP.new(bitcoin: %{"regtest" => source})
+      {HTTP, state} = reader
+      {:ok, [id], :first} = HTTP.sources(state, "bitcoin", "regtest")
+
+      context =
+        &Online.Rule.new(reader, source: id, network: "regtest", part: &1, top_level?: false)
+
+      genesis = %{"header_hash" => @genesis_hash, "height" => 0, "network" => "regtest"}
+      other = %{genesis | "header_hash" => String.duplicate("0b", 32)}
+
+      [
+        Verify.Chains.Bitcoin.genesis(
+          context.("/block/record/metadata/genesis/bitcoin"),
+          genesis
+        ),
+        Verify.Chains.Bitcoin.genesis(context.("/block/record/metadata/genesis/bitcoin"), other),
+        Verify.Chains.Bitcoin.commitment(context.("/commitments/bitcoin"), @entry)
+      ]
+    end
+
+    test "through Esplora and through Bitcoin Core" do
+      for stubbed <- [&esplora_reader/0, &core_reader/0] do
+        source = stubbed.()
+        [matching, differing, entry] = judged(source)
+
+        assert {matching.status, matching.code} == {:pass, nil}, inspect(source)
+        assert {differing.status, differing.code} == {:fail, :chain_mismatch}
+        assert {entry.status, entry.code} == {:skip, :source_unreachable}
+
+        # The read the rule made is found, with the hash alone.
+        assert [_tip, %{"kind" => "bitcoin_block_at_height", "outcome" => "found"} = read] =
+                 entry.values["reads"]
+
+        assert read["value"] == %{"hash" => @entry["header_hash"]}
+      end
+    end
+  end
 end

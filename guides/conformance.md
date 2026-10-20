@@ -27,10 +27,11 @@ in `mix.exs`, as `@verification_ref`, and:
 
 The tests read the vectors from a test-only dependency on truestamp-verification at the
 pinned commit, so none are copied into this repository. `test/conformance_test.exs` runs
-every case and compares, as section 13.1 says, the label, each row reduced to
-`(code, part, status, step)`, the trace, and for an online case each edge's instant and
-basis. Messages and `values` are never compared. Each online case reads from its replay
-file, so the suite never reaches the network.
+every case and compares, as section 13.1 says, the label, the run's code where the case's
+expected output gives one, each row reduced to `(code, part, status, step)`, the trace, and
+for an online case each edge's instant and basis. Messages and `values` are never
+compared. Each online case reads from its replay file, so the suite never reaches the
+network, and the replay file stands only as the sources whose identity read it holds.
 
 `mix truestamp.conformance CASES_JSON` prints, for each case, what section 13.1 compares,
 as one JSON document, for anyone who wants to diff another verifier's output against the

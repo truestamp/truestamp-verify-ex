@@ -368,6 +368,30 @@ defmodule Truestamp.VerifyTest do
   end
 
   describe "apply_expected_hash/2" do
+    # The verifier's clock stamps the `fetched_at` of a read that gave no answer, and of an
+    # outcome such a read settled (SPEC.md section 10.4, what a row read), so two runs of one
+    # case differ there and nowhere else: each `fetched_at` but the one the replay stamps on
+    # every answer it gives is written "clock".
+    defp unclocked(map, options) do
+      stamp =
+        case options[:reader] do
+          {Replay, %Replay{fetched_at: fetched_at}} -> DateTime.to_iso8601(fetched_at)
+          nil -> nil
+        end
+
+      clock(map, stamp)
+    end
+
+    defp clock(%{} = map, stamp) do
+      Map.new(map, fn
+        {"fetched_at", fetched_at} when fetched_at != stamp -> {"fetched_at", "clock"}
+        {name, value} -> {name, clock(value, stamp)}
+      end)
+    end
+
+    defp clock(list, stamp) when is_list(list), do: Enum.map(list, &clock(&1, stamp))
+    defp clock(value, _stamp), do: value
+
     # Two runs of every case, which takes more than a minute on a CI runner under --cover.
     @tag timeout: 300_000
     test "gives the report a fresh run with that hash gives, on every case" do
@@ -380,7 +404,8 @@ defmodule Truestamp.VerifyTest do
           {:ok, fresh} = Verify.verify_file(path, Keyword.put(options, :expected_hash, hash))
           applied = Verify.apply_expected_hash(without, hash)
 
-          assert Report.to_map(applied) == Report.to_map(fresh),
+          assert unclocked(Report.to_map(applied), options) ==
+                   unclocked(Report.to_map(fresh), options),
                  "#{kase["id"]} with #{inspect(hash)}"
         end
       end

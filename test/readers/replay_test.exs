@@ -49,16 +49,28 @@ defmodule Truestamp.Verify.Readers.ReplayTest do
 
     assert Replay.new(path) == {:error, :not_a_replay_file}
 
+    identity = %{"kind" => "bitcoin_identity", "network" => "regtest"}
+    genesis = %{"outcome" => "found", "value" => %{"hash" => String.duplicate("0f", 32)}}
+
     records = [
+      %{"read" => identity, "answer" => genesis, "source" => "a"},
+      %{
+        "read" => identity,
+        "answer" => %{"outcome" => "unreachable", "reason" => "x"},
+        "source" => "b"
+      },
       %{"read" => read, "answer" => found.(1), "source" => "a"},
       %{"read" => read, "answer" => found.(2), "source" => "b"},
-      %{"read" => read, "answer" => found.(3)}
+      %{"read" => read, "answer" => found.(3)},
+      %{"read" => read, "answer" => found.(4), "source" => "c"}
     ]
 
     File.write!(path, JCS.encode(%{"reads" => records}))
 
+    # "c" has an answer but no identity read in the file, so it is no source; "b"'s identity
+    # read is held, though it is unreachable.
     {:ok, {Replay, state}} =
-      Replay.new(path, sources: %{"bitcoin" => %{"regtest" => {:all, ["a", "b"]}}})
+      Replay.new(path, sources: %{"bitcoin" => %{"regtest" => {:all, ["c", "a", "b"]}}})
 
     assert Replay.sources(state, "bitcoin", "regtest") == {:ok, ["a", "b"], :all}
 
@@ -96,6 +108,89 @@ defmodule Truestamp.Verify.Readers.ReplayTest do
              Replay.read(state, :replay, "mainnet", :bitcoin_tip, %{})
   end
 
+  describe "the sources it stands as (SPEC.md 13.2)" do
+    # Every online case: each Stellar and Bitcoin network it pins has, as its sources, the
+    # names of the case's `sources` whose identity read the replay holds, in their order and
+    # under their policy; with no `sources` for the network, the one unnamed source when the
+    # replay holds its identity read; and otherwise none. A name added to the case's sources
+    # whose identity read the file does not hold, "ghost", is never a source, wherever it
+    # stands in the order.
+    @vectors Verification.vectors()
+    {:ok, cases} = Conformance.cases(Path.join(@vectors, "cases.json"))
+    @online_cases Enum.filter(cases, &Conformance.online?/1)
+
+    # The {chain, network, source} of every identity read the case's replay holds.
+    defp identities(kase) do
+      {:ok, %{"reads" => records}} =
+        @vectors |> Path.join(kase["config"]["online"]) |> File.read!() |> JSON.parse()
+
+      for %{"read" => %{"kind" => kind, "network" => network}} = record <- records,
+          String.ends_with?(kind, "_identity"),
+          into: MapSet.new(),
+          do: {String.replace_suffix(kind, "_identity", ""), network, record["source"]}
+    end
+
+    defp pinned(kase) do
+      for {_kind, pins} <- kase["config"]["networks"],
+          {chain, network} <- pins,
+          chain in ["stellar", "bitcoin"],
+          uniq: true,
+          do: {chain, network}
+    end
+
+    # The state of the case's replay reader, its named sources those of the case.
+    defp state(kase) do
+      {:ok, options} = Conformance.options(kase, @vectors)
+      {Replay, state} = options[:reader]
+      state
+    end
+
+    # What the reader must name for `chain` and `network`, from the replay's identity reads.
+    defp expected(identities, named, chain, network) do
+      case get_in(named, [chain, network]) do
+        {policy, names} ->
+          case Enum.filter(names, &({chain, network, &1} in identities)) do
+            [] -> {:error, :no_source}
+            held -> {:ok, held, policy}
+          end
+
+        nil ->
+          if {chain, network, nil} in identities,
+            do: {:ok, [:replay], :first},
+            else: {:error, :no_source}
+      end
+    end
+
+    test "a named source counts only when the file holds its identity read" do
+      checked =
+        for kase <- @online_cases, {chain, network} <- pinned(kase) do
+          identities = identities(kase)
+          state = state(kase)
+
+          assert Replay.sources(state, chain, network) ==
+                   expected(identities, state.named, chain, network),
+                 kase["id"]
+
+          # "ghost", first and last, beside the case's own names or as the network's only one.
+          {policy, names} = get_in(state.named, [chain, network]) || {:first, []}
+
+          for ghosted <- [["ghost" | names], names ++ ["ghost"]] do
+            named = put_in(state.named, [Access.key(chain, %{}), network], {policy, ghosted})
+            given = Replay.sources(%{state | named: named}, chain, network)
+
+            assert given == expected(identities, named, chain, network), kase["id"]
+            with {:ok, held, _policy} <- given, do: refute("ghost" in held, kase["id"])
+          end
+
+          {kase["id"], chain, network}
+        end
+
+      # Every online case pins at least one such network, and some name several sources.
+      assert length(checked) > length(@online_cases)
+      assert Enum.any?(@online_cases, &Map.has_key?(&1["config"], "sources"))
+    end
+  end
+
   describe "a source named \"replay\"" do
     # Every case that names several sources, with one of its sources renamed "replay" in
     # its config and in the records of its replay that name it: section 13.2's names are
@@ -127,7 +222,7 @@ defmodule Truestamp.Verify.Readers.ReplayTest do
       assert length(runs) > length(@sources_cases)
 
       for {kase, renamed_case} <- runs do
-        options = [online?: true, trace?: Map.has_key?(kase["expected"], "trace")]
+        options = Conformance.output_options(kase)
         expected = kase |> Conformance.run(@vectors) |> Conformance.output(options)
         output = renamed_case |> Conformance.run(vectors) |> Conformance.output(options)
 

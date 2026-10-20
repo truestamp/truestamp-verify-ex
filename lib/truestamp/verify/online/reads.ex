@@ -15,7 +15,8 @@ defmodule Truestamp.Verify.Online.Reads do
   # - a cached best-chain Bitcoin block at a height g is kept only when its meta carries
   #   `tip_height`, the source's tip it was read under, of at least g + BITCOIN_FINALITY,
   #   and refused otherwise;
-  # - one answer per read for the whole run (the spec allows it), kept in the run;
+  # - one found or not-found answer per read for the whole run (the spec allows it), kept
+  #   in the run; an unreachable answer is not kept, so a later row reads again;
   # - a deadline over the whole online run: a read past it is unreachable.
 
   alias Truestamp.Verify.Online.Answer

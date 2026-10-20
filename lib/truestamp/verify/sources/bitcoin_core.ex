@@ -21,6 +21,15 @@ if Code.ensure_loaded?(Req) do
     | `:bitcoin_block` | `getblockheader <hash>` | `height`, `median_time_past` (`mediantime`), `time` |
 
     The RPC errors -8 (a height out of range) and -5 (a block not found) are not found.
+
+    The block at a height is two calls (SPEC.md section 10.4, "Answers"). When
+    `getblockhash` answers with a hash and `getblockheader` gives no usable answer or not
+    found, whatever the cause (a transport failure, a status, the error -5 or any other, a
+    body that does not parse, a result that is not an object), the read is found with the
+    hash alone, and the first call's meta, and the engine judges it on the fields its rule
+    uses. Every body is parsed under J2 to J6 of section 10.1 in every member, so a header
+    whose unused `difficulty` is 2^53 or more is no usable answer, and leaves the hash
+    alone. This is deliberate, as section 10.4 says.
     """
 
     @behaviour Truestamp.Verify.Source
@@ -49,17 +58,27 @@ if Code.ensure_loaded?(Req) do
     end
 
     def read(options, :bitcoin_block_at_height, %{"height" => height}) when is_integer(height) do
-      with {:ok, hash, _meta} when is_binary(hash) <- call(options, "getblockhash", [height]),
-           {:ok, %{} = header, meta} <- call(options, "getblockheader", [hash]) do
-        {:ok,
-         %{
-           "hash" => hash,
-           "median_time_past" => header["mediantime"],
-           "transaction_count" => header["nTx"]
-         }, meta}
-      else
-        {:ok, _malformed, _meta} -> {:error, :malformed_answer}
-        other -> other
+      case call(options, "getblockhash", [height]) do
+        {:ok, hash, meta} when is_binary(hash) ->
+          case call(options, "getblockheader", [hash]) do
+            {:ok, %{} = header, header_meta} ->
+              fields = %{
+                "hash" => hash,
+                "median_time_past" => header["mediantime"],
+                "transaction_count" => header["nTx"]
+              }
+
+              {:ok, fields, header_meta}
+
+            _no_header ->
+              {:ok, %{"hash" => hash}, meta}
+          end
+
+        {:ok, _not_a_hash, _meta} ->
+          {:error, :malformed_answer}
+
+        other ->
+          other
       end
     end
 

@@ -20,8 +20,9 @@ defmodule Truestamp.Verify.Steps.Reads do
   # fields an answer contradicts, is in `notes`, by source.
   #
   # A source whose identity read gave no usable answer at step 0 serves no read: its outcome
-  # is `skip source_unreachable`, with no read made. Every answer read is kept in the run, so
-  # a later row that needs the same read uses it (section 10.4).
+  # is `skip source_unreachable`, with no read made. Every found or not-found answer is kept
+  # in the run, so a later row that needs the same read uses it; an unreachable answer is
+  # not kept, and a later row reads again (section 10.4, "no cache keeps the answer").
 
   alias Truestamp.Verify.{Edge, Row, Run}
   alias Truestamp.Verify.Online.{Answer, Policy, Reads, Rule}
@@ -86,7 +87,8 @@ defmodule Truestamp.Verify.Steps.Reads do
   defp remember(run, {_chain, network}, per_source) do
     reads =
       for {%{id: id}, %Outcome{answers: answers}} <- per_source,
-          {kind, params, answer} <- answers,
+          {kind, params, answer, _answered_at} <- answers,
+          not match?({:unreachable, _reason}, answer),
           into: run.reads,
           do: {{id, network, kind, params}, answer}
 
@@ -120,7 +122,10 @@ defmodule Truestamp.Verify.Steps.Reads do
   end
 
   defp outcome(source, %Outcome{} = result, network) do
-    reads = for {kind, params, answer} <- result.answers, do: read(kind, params, answer, network)
+    reads =
+      for {kind, params, answer, answered_at} <- result.answers,
+          do: read(kind, params, answer, answered_at, network)
+
     {cached, fetched_at} = settled(source, result, reads)
 
     %{
@@ -135,36 +140,39 @@ defmodule Truestamp.Verify.Steps.Reads do
   end
 
   # One read of a source, its `read` and `answer` in the form of a replay record (section
-  # 13.2), with the `cached` and `fetched_at` of its answer.
-  defp read(kind, params, answer, network) do
+  # 13.2), with the `cached` and `fetched_at` of its answer. An unreachable read gave no
+  # answer, so none came from a cache: its `cached` is false, and its `fetched_at` is when
+  # its failure came back, by the verifier's clock (section 10.4, what a row read).
+  defp read(kind, params, answer, answered_at, network) do
     read = Map.put(params, "kind", Atom.to_string(kind))
     read = if network, do: Map.put(read, "network", network), else: read
     values = Answer.to_values(answer)
 
     %{
       "answer" => Map.take(values, ["outcome", "reason", "value"]),
-      "cached" => values["cached"],
-      "fetched_at" => values["fetched_at"],
+      "cached" => Map.get(values, "cached", false),
+      "fetched_at" => values["fetched_at"] || DateTime.to_iso8601(answered_at),
       "read" => read
     }
   end
 
   # The `cached` and `fetched_at` of the read that settled a source's outcome: its candidate
-  # read, else the last read that gave an answer, else its identity read.
+  # read, else the last read made, whatever it answered, since a rule reads nothing after
+  # its outcome is settled, else, for a source asked nothing else, its identity read. An
+  # outcome that ends unreachable is settled by a read that gave no answer: `cached` false,
+  # and the time its failure came back. A source with no identity read, NIST's, whose rule
+  # read nothing, gave no answer either: `cached` false, and the time of the row, by the
+  # verifier's clock.
   defp settled(_source, %Outcome{candidate: %{} = edge}, _reads),
     do: {edge.cached, DateTime.to_iso8601(edge.fetched_at)}
 
-  defp settled(source, _result, reads) do
-    case Enum.filter(reads, &(&1["fetched_at"] != nil)) do
-      [] -> identity_settled(source)
-      answered -> {List.last(answered)["cached"], List.last(answered)["fetched_at"]}
-    end
-  end
-
-  defp identity_settled(%{identity_meta: %{cached: cached, fetched_at: fetched_at}}),
+  defp settled(%{identity_meta: %{cached: cached, fetched_at: fetched_at}}, _result, []),
     do: {cached, DateTime.to_iso8601(fetched_at)}
 
-  defp identity_settled(_source), do: {nil, nil}
+  defp settled(_source, _result, []), do: {false, DateTime.to_iso8601(DateTime.utc_now())}
+
+  defp settled(_source, _result, reads),
+    do: {List.last(reads)["cached"], List.last(reads)["fetched_at"]}
 
   defp candidate_value(edge), do: %{"basis" => edge.basis, "instant" => Edge.instant_string(edge)}
 

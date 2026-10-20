@@ -17,8 +17,8 @@ reads gave.
 Every read goes through a `Truestamp.Verify.Reader`, given with the `:reader` option. The
 engine owns every judgement: it judges each answer on the fields its rule reads at that
 point (SPEC.md section 10.4), refuses a cached answer where the spec requires a live read,
-keeps one answer per read for the whole run, and turns a reader that crashes into an
-unreachable read. A reader only fetches.
+keeps one found or not-found answer per read for the whole run, and none that was
+unreachable, and turns a reader that crashes into an unreachable read. A reader only fetches.
 
 The reads are named as the replay files of section 13.2 name them, so a reader can be
 anything that can answer them: the bundled HTTP sources, a cache in front of them, an
@@ -41,6 +41,13 @@ Truestamp.Verify.verify(proof_bytes, Truestamp.Verify.Online.defaults())
 | `Truestamp.Verify.Sources.Esplora` | Bitcoin, through any Esplora API: Blockstream, mempool.space (presets for mainnet, testnet, testnet4 and signet), or your own |
 | `Truestamp.Verify.Sources.BitcoinCore` | Bitcoin, through a node's JSON-RPC |
 | `Truestamp.Verify.Sources.NistBeacon` | NIST's Randomness Beacon |
+
+Esplora and Bitcoin Core read the best-chain block at a height in two calls, the hash at
+that height and then the block with that hash. When the second call gives no usable answer
+or not found, the read keeps the hash the first gave (SPEC.md section 10.4), so a
+`genesis.bitcoin` row, which uses only the hash, is still judged. Every answer is parsed
+under J2 to J6 of section 10.1 in every member, even one no read uses: a Bitcoin block
+whose `difficulty` is 2^53 or more is no usable answer, as section 10.4 says on purpose.
 
 Choose sources per network with `:sources`, in the form `Readers.HTTP.new/1` takes; each
 replaces the default of its own network only:
@@ -121,8 +128,14 @@ whatever the network's other sources show.
 Every CHAIN and SOURCES row of an online run says what it read (section 10.4), in its
 `values`: the network's `policy` and `required`, the n it asks for, and in `outcomes` one
 object for each source the row asked, with that source's status, code, candidate and every
-read made of it. An edge drawn from several sources names each of them in `sources`, and
-the command's summary says which it was read from.
+read made of it. Each outcome and each read gives `cached`, false for a live read and for a
+read that gave no answer, never null, and `fetched_at`, when its answer came back, or for a
+read that gave none, when its failure did, by the verifier's clock. An outcome's are those
+of its candidate read, else of the last read made of that source, else, for a source asked
+nothing else, of its identity read. Each unreachable read gives its `reason`, an ASCII128
+that says why, such as `HTTP 503` (`Truestamp.Verify.Online.Answer.describe/1`).
+An edge drawn from several sources names each of them in `sources`, and the command's
+summary says which it was read from.
 
 ## Deadlines and caching
 

@@ -2,9 +2,13 @@
 # SPDX-License-Identifier: Apache-2.0
 
 defmodule Truestamp.Verify.Online.AnswerTest do
-  @moduledoc "The classes of an answer's fields (SPEC.md section 13.2's table)."
+  @moduledoc """
+  The classes of an answer's fields (SPEC.md section 13.2's table), and an answer as a row's
+  `values` write it.
+  """
 
   use ExUnit.Case, async: true
+  use ExUnitProperties
 
   alias Truestamp.Verify.Online.Answer
 
@@ -74,6 +78,63 @@ defmodule Truestamp.Verify.Online.AnswerTest do
            }
 
     assert Answer.to_values({:unreachable, "http 429"})["reason"] == "http 429"
-    assert Answer.to_values({:unreachable, {:http, 503}})["reason"] == "{:http, 503}"
+  end
+
+  # SPEC.md 2.4 and 13.2: a reason is an ASCII128, 1 to 128 printable ASCII characters with
+  # no `"` or `\`.
+  @ascii128 ~r/\A[\x20\x21\x23-\x5b\x5d-\x7e]{1,128}\z/
+
+  test "an unreachable reason is written as text that says why, never an Elixir term" do
+    for {reason, written} <- [
+          {{:http_status, 503}, "HTTP 503"},
+          {{:transport, "connection refused"}, "transport failure: connection refused"},
+          {{:rpc_error, %{"code" => -28, "message" => "Loading block index"}},
+           "Bitcoin Core RPC error -28"},
+          {{:rpc_error, %{"message" => "no code"}}, "the reader gave no usable answer"},
+          {{:cookie, :enoent}, "the Bitcoin Core cookie file cannot be read"},
+          {{:reader_fault, :error, "RuntimeError"}, "the reader raised RuntimeError"},
+          {{:reader_fault, :throw, nil}, "the reader threw"},
+          {{:reader_fault, :exit, nil}, "the reader exited"},
+          {{:not_in_replay, %{"kind" => "bitcoin_tip"}},
+           "the replay file holds no answer to this read"},
+          {{:unreachable, "HTTP 503"}, "HTTP 503"},
+          {{:unreachable, nil}, "the reader gave no usable answer"},
+          {:deadline, "the run's deadline passed before the answer came"},
+          {:malformed_answer, "the answer does not parse, or is not in its form"},
+          {:cached_live_read, "a cached answer, to a read made only live"},
+          {:cached_not_found, "a cached not-found answer, which only a live read gives"},
+          {:cached_not_final, "a cached block at a height, read under a tip that was not final"},
+          {:identity_not_found, "the identity read answered not found"},
+          {:identity_unusable, "the identity read gave no identity in its form"},
+          {:answered_another, "the answer names another object than the one asked for"},
+          {:timeout, "timeout"},
+          {nil, "the reader gave no usable answer"},
+          {{:http, 503}, "the reader gave no usable answer"},
+          {~s(say "why"\n), "say ?why??"},
+          {"caf\u00e9 \\ <<0xFF>>", "caf? ? <<0xFF>>"},
+          {<<"a", 0xFF, "b">>, "a?b"},
+          {"", "the reader gave no usable answer"},
+          {String.duplicate("x", 200), String.duplicate("x", 128)}
+        ] do
+      assert Answer.describe(reason) == written, inspect(reason)
+      assert Regex.match?(@ascii128, written), written
+    end
+  end
+
+  property "every reason, of any term, is written as an ASCII128" do
+    check all(
+            reason <-
+              one_of([
+                term(),
+                string(:printable),
+                binary(),
+                tuple({constant(:unreachable), string(:printable)}),
+                tuple({constant(:transport), binary()}),
+                tuple({constant(:reader_fault), constant(:error), string(:utf8)})
+              ])
+          ) do
+      written = Answer.describe(reason)
+      assert Regex.match?(@ascii128, written), inspect({reason, written})
+    end
   end
 end

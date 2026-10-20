@@ -27,6 +27,14 @@ if Code.ensure_loaded?(Req) do
     | `:bitcoin_block` | `GET /block/<hash>` | `height`, `median_time_past` (`mediantime`), `time` (`timestamp`) |
 
     A 404 is not found: for a height above the tip, or a block the server does not hold.
+
+    The block at a height is two calls (SPEC.md section 10.4, "Answers"). When the first
+    answers with a hash and the second gives no usable answer or not found, whatever the
+    cause (a transport failure, a status, a 404, a body that does not parse or is not an
+    object), the read is found with the hash alone, and the first call's meta, and the
+    engine judges it on the fields its rule uses. Every body is parsed under J2 to J6 of
+    section 10.1 in every member, so a block whose unused `difficulty` is 2^53 or more is no
+    usable answer, and leaves the hash alone. This is deliberate, as section 10.4 says.
     """
 
     @behaviour Truestamp.Verify.Source
@@ -65,16 +73,22 @@ if Code.ensure_loaded?(Req) do
     end
 
     def read(options, :bitcoin_block_at_height, %{"height" => height}) when is_integer(height) do
-      with {:ok, body, _meta} <- get(options, "/block-height/#{height}"),
+      with {:ok, body, meta} <- get(options, "/block-height/#{height}"),
            hash = text(body),
-           {:ok, block, meta} <- block(options, hash) do
-        fields = %{
-          "hash" => hash,
-          "median_time_past" => block["mediantime"],
-          "transaction_count" => block["tx_count"]
-        }
+           :ok <- hex64(hash) do
+        case block(options, hash) do
+          {:ok, block, block_meta} ->
+            fields = %{
+              "hash" => hash,
+              "median_time_past" => block["mediantime"],
+              "transaction_count" => block["tx_count"]
+            }
 
-        {:ok, fields, meta}
+            {:ok, fields, block_meta}
+
+          _no_block ->
+            {:ok, %{"hash" => hash}, meta}
+        end
       end
     end
 

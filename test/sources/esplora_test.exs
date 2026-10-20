@@ -70,6 +70,61 @@ defmodule Truestamp.Verify.Sources.EsploraTest do
              Esplora.read(options(), :bitcoin_block_at_height, %{"height" => 840_000})
   end
 
+  # The second call of a block at a height answers with `second`: a body, `{status, body}`,
+  # or `:transport` for a transport failure. Each request tells the test when it arrived.
+  defp second_call(second) do
+    parent = self()
+
+    Req.Test.stub(__MODULE__, fn conn ->
+      send(parent, {:request, conn.request_path, DateTime.utc_now()})
+
+      case {conn.request_path, second} do
+        {"/api/block-height/840000", _second} -> Plug.Conn.send_resp(conn, 200, @hash)
+        {_block, :transport} -> Req.Test.transport_error(conn, :econnrefused)
+        {_block, {status, body}} -> Plug.Conn.send_resp(conn, status, body)
+        {_block, body} -> Plug.Conn.send_resp(conn, 200, body)
+      end
+    end)
+  end
+
+  test "a block at a height whose second call gives no usable answer is found with the hash alone" do
+    # SPEC.md 10.4, "Answers": the read keeps what its first call gave, with that call's meta.
+    # 9007199254740992 is 2^53, which J5 refuses in any member, an unused one included. A
+    # failed call gives none of its fields, even in a body that holds a block's.
+    for second <- [
+          :transport,
+          {503, "busy"},
+          {503, ~s({"mediantime": 1713570000, "tx_count": 3050})},
+          {404, "Block not found"},
+          "{,}",
+          "[1]",
+          ~s({"mediantime": 1713570000, "tx_count": 3050, "difficulty": 9007199254740992})
+        ] do
+      second_call(second)
+
+      assert {:ok, fields, meta} =
+               Esplora.read(options(), :bitcoin_block_at_height, %{"height" => 840_000})
+
+      assert fields == %{"hash" => @hash}, inspect(second)
+      assert_received {:request, "/api/block-height/840000", _first}
+      assert_received {:request, "/api/block/" <> @hash, second_arrived}
+      assert meta.source == "esplora https://esplora.test/api"
+      assert DateTime.compare(meta.fetched_at, second_arrived) == :lt, inspect(second)
+    end
+  end
+
+  test "a block at a height whose difficulty is below 2^53 gives all three fields" do
+    second_call(~s({"mediantime": 1713570000, "tx_count": 3050, "difficulty": 126411437451912.2}))
+
+    assert {:ok,
+            %{"hash" => @hash, "median_time_past" => 1_713_570_000, "transaction_count" => 3050},
+            meta} = Esplora.read(options(), :bitcoin_block_at_height, %{"height" => 840_000})
+
+    # A block that answers gives its own call's meta.
+    assert_received {:request, "/api/block/" <> @hash, second_arrived}
+    assert DateTime.compare(meta.fetched_at, second_arrived) == :gt
+  end
+
   test "a height above the tip, or a block the server lacks, is not found" do
     stub(%{})
 

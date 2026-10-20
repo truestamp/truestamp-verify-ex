@@ -162,9 +162,10 @@ files of truestamp-verification, which runs no verifier itself.
 
 This library passes every case of `vectors/cases.json` in truestamp-verification at the
 commit `mix.exs` pins (`@verification_ref`), offline and online, comparing labels, every
-row, the traces and both edges of the submission window. The tests print the citation a
-claim of conformance needs: that commit and the SHA-256 of its `MANIFEST.sha256`.
-`Truestamp.Verify.Spec.source/0` gives the same pair at run time.
+row, the run's code where a case's expected output gives one, the traces and both edges of
+the submission window. The tests print the citation a claim of conformance needs: that
+commit and the SHA-256 of its `MANIFEST.sha256`. `Truestamp.Verify.Spec.source/0` gives
+the same pair at run time.
 
 `priv/spec/` mirrors that commit's `spec/` byte for byte, and the library compiles it in.
 The tests read the vectors from a test-only dependency on truestamp-verification, so none

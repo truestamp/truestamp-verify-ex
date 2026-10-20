@@ -10,7 +10,7 @@ defmodule Truestamp.Verify.MixProject do
   # The commit of truestamp-verification (SPEC.md, spec/ and vectors/) this library conforms
   # to. `priv/spec/` mirrors that commit's spec/ (scripts/sync_spec.exs), and the tests read
   # its vectors/ through the test-only dependency below.
-  @verification_ref "28a87ae53ee05632236af2f8c0d5819c8479a46e"
+  @verification_ref "51dbf0343b06cb52d8531dc2fb18f2f728010afc"
 
   def project do
     [

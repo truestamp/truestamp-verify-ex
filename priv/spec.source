@@ -1,5 +1,5 @@
 {
-  "commit": "28a87ae53ee05632236af2f8c0d5819c8479a46e",
+  "commit": "51dbf0343b06cb52d8531dc2fb18f2f728010afc",
   "files": {
     "spec/constants.json": "16501d3d455ab90d476957b1923d112814c6280279f58311d5e389a4d105ee9a",
     "spec/constructions/c0d70826d7501d5089184d1947bad3dcc33c3172269d425f16fc0025ed07df49.json": "c0d70826d7501d5089184d1947bad3dcc33c3172269d425f16fc0025ed07df49",
@@ -15,6 +15,6 @@
     "spec/small-order-keys.json": "ffce98a8251ba283a9a5fb1f9e50fd4ae416a740db6a596652068e814c4a8dcc",
     "spec/value-classes.json": "13ad22e3e027b63acf5c3b3f371bfb352eda147e37a091b725d77f575b388de0"
   },
-  "manifest_sha256": "cbb040cc2deb4a738b106025eeff824b4f5a7a38310e6f98ac77c6bd1cfe38d5",
+  "manifest_sha256": "c6567646d500f79d276d2d5ca82adc27b834b95d7d9e1087ce1af09be99b1e88",
   "repository": "https://github.com/truestamp/truestamp-verification"
 }

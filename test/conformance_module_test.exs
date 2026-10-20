@@ -174,6 +174,36 @@ defmodule Truestamp.Verify.ConformanceModuleTest do
     end
   end
 
+  describe "the run's code of a report case (sections 13.1 and 13.2)" do
+    test "output_options/1 asks for the code exactly where the expected output gives one" do
+      two_steps = Cases.get!("two_steps-policy-derive")
+      assert Conformance.output_options(two_steps)[:code?] == true
+      assert Conformance.output_options(Cases.get!("sound-item"))[:code?] == false
+      assert Conformance.output_options(Cases.get!("reads-bitcoin-tip_final"))[:online?] == true
+    end
+
+    test "output/2 gives a failed report's code only under code?, and compare/3 compares it" do
+      two_steps = Cases.get!("two_steps-policy-derive")
+      result = Conformance.run(two_steps, @vectors)
+
+      with_code = Conformance.output(result, Conformance.output_options(two_steps))
+      assert with_code["code"] == "network_mismatch"
+      assert Conformance.compare(two_steps, with_code, @vectors) == :ok
+
+      without = Conformance.output(result, trace?: false, online?: false)
+      refute Map.has_key?(without, "code")
+      assert {:error, "expected " <> _} = Conformance.compare(two_steps, without, @vectors)
+
+      # The second failing row's code is not the run's.
+      later = %{with_code | "code" => "derivation_mismatch"}
+      assert {:error, "expected " <> _} = Conformance.compare(two_steps, later, @vectors)
+
+      # A report that did not fail has no code to give, so a case that expects one differs.
+      passed = Conformance.run(Cases.get!("sound-item"), @vectors)
+      refute Map.has_key?(Conformance.output(passed, code?: true), "code")
+    end
+  end
+
   describe "main/1" do
     @cases Verification.path("vectors/cases.json")
 

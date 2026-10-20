@@ -5,7 +5,7 @@ defmodule Truestamp.Verify.Test.Cases do
   @moduledoc """
   The cases of `vectors/cases.json` (SPEC.md section 13.2), for the tests that read them
   beyond `test/conformance_test.exs`: every case, every offline case, a case by id, its
-  proof's bytes and its options, and where steps 0 to 9 decide it.
+  proof's bytes and its options.
 
   `cases.json` is read with `Truestamp.Verify.Test.StrictJSON`, since it is larger than
   MAX_READ_OCTETS, which binds a document, not a data file; a case's proof is handed to the
@@ -50,22 +50,5 @@ defmodule Truestamp.Verify.Test.Cases do
   def options(kase) do
     {:ok, options} = Conformance.options(kase, @vectors)
     options
-  end
-
-  @doc """
-  Where steps 0 to 6 (the gate, SPEC.md 10.2) decide the case: `:bare` for a bare
-  rejection at steps 0 to 3; `:gate` for a report with a failing row at ENVIRONMENT,
-  KEY_BINDING or SIGNATURE; `:later` for every other report, whose gate opens.
-  """
-  @spec gate_class(map()) :: :bare | :gate | :later
-  def gate_class(%{"expected" => %{"code" => _code}}), do: :bare
-
-  def gate_class(%{"expected" => %{"rows" => rows}}) do
-    failed_at_gate? =
-      Enum.any?(rows, fn [_code, _part, status, step] ->
-        status == "fail" and step in ~w(ENVIRONMENT KEY_BINDING SIGNATURE)
-      end)
-
-    if failed_at_gate?, do: :gate, else: :later
   end
 end

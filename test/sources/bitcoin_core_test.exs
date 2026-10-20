@@ -88,6 +88,79 @@ defmodule Truestamp.Verify.Sources.BitcoinCoreTest do
              BitcoinCore.read(@options, :bitcoin_tip, %{})
   end
 
+  # `getblockhash` answers with the hash, and `getblockheader` with `second`: a result,
+  # `{:error, code}`, `{:raw, status, body}` or `:transport`. Each call tells the test when
+  # it arrived.
+  defp second_call(second) do
+    parent = self()
+
+    Req.Test.stub(__MODULE__, fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+      %{"method" => method} = elem(JSON.parse(body), 1)
+      send(parent, {:rpc, method, DateTime.utc_now()})
+
+      case {method, second} do
+        {"getblockhash", _second} ->
+          Req.Test.json(conn, %{"result" => @hash, "error" => nil})
+
+        {"getblockheader", :transport} ->
+          Req.Test.transport_error(conn, :timeout)
+
+        {"getblockheader", {:error, code}} ->
+          conn
+          |> Plug.Conn.put_status(500)
+          |> Req.Test.json(%{"result" => nil, "error" => %{"code" => code}})
+
+        {"getblockheader", {:raw, status, raw}} ->
+          Plug.Conn.send_resp(conn, status, raw)
+
+        {"getblockheader", result} ->
+          Req.Test.json(conn, %{"result" => result, "error" => nil})
+      end
+    end)
+  end
+
+  test "a block at a height whose getblockheader gives no usable answer is found with the hash alone" do
+    # SPEC.md 10.4, "Answers": the read keeps what its first call gave, with that call's meta.
+    # 9007199254740992 is 2^53, which J5 refuses in any member, an unused one included. An
+    # answer with an error gives none of its result, even a result that holds a header's.
+    big =
+      ~s({"result": {"mediantime": 100, "nTx": 3, "difficulty": 9007199254740992}, "error": null})
+
+    for second <- [
+          :transport,
+          {:raw, 503, "busy"},
+          {:raw, 500, ~s({"result": {"mediantime": 100, "nTx": 3}, "error": {"code": -1}})},
+          {:error, -5},
+          {:error, -1},
+          {:raw, 200, "not json"},
+          "header",
+          {:raw, 200, big}
+        ] do
+      second_call(second)
+
+      assert {:ok, fields, meta} =
+               BitcoinCore.read(@options, :bitcoin_block_at_height, %{"height" => 5})
+
+      assert fields == %{"hash" => @hash}, inspect(second)
+      assert_received {:rpc, "getblockhash", _first}
+      assert_received {:rpc, "getblockheader", second_arrived}
+      assert meta.source == "bitcoin-core http://node.test:8332"
+      assert DateTime.compare(meta.fetched_at, second_arrived) == :lt, inspect(second)
+    end
+  end
+
+  test "a block at a height whose header's difficulty is below 2^53 gives all three fields" do
+    second_call(%{"mediantime" => 100, "nTx" => 3, "difficulty" => 126_411_437_451_912.2})
+
+    assert {:ok, %{"hash" => @hash, "median_time_past" => 100, "transaction_count" => 3}, meta} =
+             BitcoinCore.read(@options, :bitcoin_block_at_height, %{"height" => 5})
+
+    # A header that answers gives its own call's meta.
+    assert_received {:rpc, "getblockheader", second_arrived}
+    assert DateTime.compare(meta.fetched_at, second_arrived) == :gt
+  end
+
   test "an answer of another shape is no usable answer" do
     stub(%{"getblockhash" => 7, "getblockheader" => "header"})
 

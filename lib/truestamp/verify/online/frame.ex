@@ -24,7 +24,8 @@ defmodule Truestamp.Verify.Online.Frame do
   #
   # The frame maps each `{chain, network}` (`{"nist", nil}` for NIST) to its policy and its
   # sources, each with the outcome of its identity read and that read's meta, which a row
-  # whose source was asked nothing else reports (section 10.4, what a row read).
+  # whose source was asked nothing else reports (section 10.4, what a row read): for an
+  # identity read that gave no answer, `cached` false and the time its failure came back.
 
   alias Truestamp.Verify.{Chains, Config}
   alias Truestamp.Verify.Online.{Answer, Reads}
@@ -88,8 +89,9 @@ defmodule Truestamp.Verify.Online.Frame do
   # reads even when the reader gives them one id.
   #
   # The reads run at once, each in a task of its own, and each under the run's deadline, as
-  # `Reads.read/6` holds every read to it; they are then judged in the order of the networks,
-  # so the outcome is the one reads made one after another give. A task carries the calling
+  # `Reads.read/6` holds every read to it, and each with the time its answer came back, by
+  # the verifier's clock; they are then judged in the order of the networks, so the outcome
+  # is the one reads made one after another give. A task carries the calling
   # process in its `$callers`, which is how a reader's process-local stubs reach the read
   # (`Truestamp.Verify.Reader`, "Processes").
   defp identities(reader, frame, deadline) do
@@ -133,8 +135,9 @@ defmodule Truestamp.Verify.Online.Frame do
     {production, _kind} = module.identity()
 
     judged =
-      for {source, answer} <- Enum.zip(entry.sources, answers) do
-        {%{source | identity_meta: meta(answer)}, judge(module, answer, network == production)}
+      for {source, {answer, answered_at}} <- Enum.zip(entry.sources, answers) do
+        {%{source | identity_meta: meta(answer, answered_at)},
+         judge(module, answer, network == production)}
       end
 
     if Enum.any?(judged, &match?({_source, :forbidden}, &1)),
@@ -147,12 +150,14 @@ defmodule Truestamp.Verify.Online.Frame do
   defp confirmed({source, {:unreachable, reason}}),
     do: %{source | identity: {:unreachable, reason}}
 
-  defp identity({module, state}, source, network, kind, deadline),
-    do: Reads.read({module, state}, source, network, kind, %{}, deadline)
+  defp identity({module, state}, source, network, kind, deadline) do
+    answer = Reads.read({module, state}, source, network, kind, %{}, deadline)
+    {answer, DateTime.utc_now()}
+  end
 
-  defp meta({:found, _fields, meta}), do: meta
-  defp meta({:not_found, meta}), do: meta
-  defp meta({:unreachable, _reason}), do: nil
+  defp meta({:found, _fields, meta}, _answered_at), do: meta
+  defp meta({:not_found, meta}, _answered_at), do: meta
+  defp meta({:unreachable, _reason}, answered_at), do: %{cached: false, fetched_at: answered_at}
 
   # Section 9: `{:at_least, n}` with n from 1 to the number of the network's sources.
   defp policy?(policy, _count) when policy in [:first, :all], do: true

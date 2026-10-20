@@ -73,8 +73,8 @@ defmodule Truestamp.Verify.Online.Rule do
   source for that entry: its `status` and `code`, its candidate, and in `values` every read
   made, as `read/3` records it. What differs from a run is only what a run adds around the
   rule: SHAPE and DERIVE before it, several sources combined by a policy
-  (`Truestamp.Verify.Online.Policy`), the identity confirmation, and one answer per read
-  kept across the run's rows. Each call of a rule reads afresh.
+  (`Truestamp.Verify.Online.Policy`), the identity confirmation, and one found or
+  not-found answer per read kept across the run's rows. Each call of a rule reads afresh.
 
   ### What a run checks first
 
@@ -142,6 +142,11 @@ defmodule Truestamp.Verify.Online.Rule do
     @moduledoc """
     The outcome of one rule against one source: its status and code, its `values`, and its
     candidate for an edge, when it passed and gave one.
+
+    `answers` holds every read the rule made, in the order made, as `{kind, params, answer,
+    answered_at}`: `answered_at` is when its answer, or its failure, came back, by the
+    verifier's clock, the `fetched_at` a row writes for a read that gave no answer (SPEC.md
+    section 10.4, what a row read).
     """
 
     @type t :: %__MODULE__{
@@ -149,7 +154,7 @@ defmodule Truestamp.Verify.Online.Rule do
             code: atom() | nil,
             values: map(),
             candidate: Edge.t() | nil,
-            answers: [{atom(), map(), term()}]
+            answers: [{atom(), map(), Answer.t(), DateTime.t()}]
           }
 
     @enforce_keys [:status, :code, :values]
@@ -267,8 +272,8 @@ defmodule Truestamp.Verify.Online.Rule do
   The outcome a whole run gives an entry against a source whose identity read left it
   unconfirmed, `{:unreachable, reason}` from `confirm_identity/2`: `skip
   source_unreachable`, with no read made, its `values` naming the reason under
-  `"identity"` as `Truestamp.Verify.Online.Answer.describe/1` writes it, such as
-  `%{"identity" => "identity_not_found"}`.
+  `"identity"` as `Truestamp.Verify.Online.Answer.describe/1` writes it, an ASCII128 that
+  says why, such as `%{"identity" => "the identity read answered not found"}`.
   """
   @spec unconfirmed(term()) :: outcome()
   def unconfirmed(reason),
@@ -286,16 +291,25 @@ defmodule Truestamp.Verify.Online.Rule do
   defp deadline(other),
     do: raise(ArgumentError, "deadline: not a number of milliseconds: #{inspect(other)}")
 
-  @doc "Makes the read of `kind` with `params`, and records it and its answer."
+  @doc """
+  Makes the read of `kind` with `params`, and records it, its answer, and when the answer
+  came back, by the verifier's clock.
+  """
   @spec read(context(), atom(), map()) :: {Answer.t(), context()}
   def read(%__MODULE__{read: read, reads: reads, answers: answers} = context, kind, params)
       when is_atom(kind) and is_map(params) do
     answer = read.(kind, params)
+    answered_at = DateTime.utc_now()
 
     record =
       Map.merge(%{"kind" => Atom.to_string(kind), "params" => params}, Answer.to_values(answer))
 
-    {answer, %{context | reads: [record | reads], answers: [{kind, params, answer} | answers]}}
+    {answer,
+     %{
+       context
+       | reads: [record | reads],
+         answers: [{kind, params, answer, answered_at} | answers]
+     }}
   end
 
   @doc "The rule passes, with its candidate when it gives one."

@@ -46,11 +46,11 @@ defmodule Truestamp.Verify.Reader do
   judges each answer on the fields its rule reads at that point, each in its class, refuses
   a cached answer where the spec requires a live read (identity, the Stellar root, the
   Bitcoin tip, and every not-found answer) and a cached best-chain Bitcoin block at a height
-  read under a tip that was not final (see "Caches"), keeps one answer per read for the
-  whole run, enforces the run's deadline, and turns a reader that raises, throws or exits
-  into an unreachable read. A reader need not, and should not, judge an answer against the
-  proof. The same holds outside a run, for one entry judged through
-  `Truestamp.Verify.Online.Rule.new/2` over a reader.
+  read under a tip that was not final (see "Caches"), keeps one found or not-found answer
+  per read for the whole run, and none that was unreachable, enforces the run's deadline,
+  and turns a reader that raises, throws or exits into an unreachable read. A reader need
+  not, and should not, judge an answer against the proof. The same holds outside a run, for
+  one entry judged through `Truestamp.Verify.Online.Rule.new/2` over a reader.
 
   ## Caches
 
