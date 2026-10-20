@@ -30,6 +30,10 @@ defmodule Truestamp.Verify.Steps.Configuration do
   network, a policy `{:at_least, n}` whose n is 0 or above the number of its network's
   sources, and more than one NIST source are each `configuration_error` (section 9).
 
+  Each `configuration_error` names the check that failed, and the chain and network it
+  concerns (`Truestamp.Verify.Rejection`, its `reason`, `chain` and `network`), and keeps its
+  message's id and assigns.
+
   When the step passes it reports one row, `pass`, with part null.
   """
 
@@ -38,6 +42,17 @@ defmodule Truestamp.Verify.Steps.Configuration do
   alias Truestamp.Verify.Online.Frame
 
   @truestamp_url Keyring.truestamp_url()
+
+  # The message of each reason a configuration_error gives (`Truestamp.Verify.Rejection`).
+  @messages %{
+    no_keyring: :configuration_no_keyring,
+    keyring_refused: :configuration_keyring_refused,
+    current_keyring_location: :configuration_current_keyring_location,
+    no_source: :configuration_no_source,
+    identity_forbidden: :configuration_identity_forbidden,
+    invalid_policy: :configuration_invalid_policy,
+    nist_sources: :configuration_nist_sources
+  }
 
   @doc "Step 0: `{:ok, run}`, a bare rejection, or an input that cannot be read."
   @spec configuration(Config.t()) ::
@@ -62,7 +77,7 @@ defmodule Truestamp.Verify.Steps.Configuration do
       }
 
       message =
-        Run.text(run, :configuration_pass, %{
+        Run.message(run, :configuration_pass, %{
           environment: config.environment,
           kind: trust_root.kind
         })
@@ -96,7 +111,7 @@ defmodule Truestamp.Verify.Steps.Configuration do
   end
 
   defp governing_keyring(%Config{trust: :default} = config),
-    do: rejected(config, :configuration_no_keyring, %{environment: config.environment})
+    do: rejected(config, :no_keyring, %{environment: config.environment})
 
   defp governing_keyring(%Config{trust: {:keyring, bytes, location}} = config),
     do: load(bytes, config, location, :supplied_keyring)
@@ -139,7 +154,7 @@ defmodule Truestamp.Verify.Steps.Configuration do
 
   defp fetched(_keyring, location, _meta, config, :current_keyring)
        when location != @truestamp_url,
-       do: rejected(config, :configuration_current_keyring_location, %{location: location})
+       do: rejected(config, :current_keyring_location, %{location: location})
 
   defp fetched(keyring, location, %{cached: false}, config, kind) do
     case load_read(keyring, config.environment, location) do
@@ -168,11 +183,25 @@ defmodule Truestamp.Verify.Steps.Configuration do
 
   defp load_read(_keyring, _environment, _location), do: {:error, :keyring_members}
 
-  defp refused(config, failure),
-    do: rejected(config, :configuration_keyring_refused, %{failure: failure})
+  defp refused(config, failure), do: rejected(config, :keyring_refused, %{failure: failure})
 
-  defp rejected(%Config{messages: messages}, id, assigns),
-    do: {:rejected, Rejection.new(:configuration_error, Messages.render(messages, id, assigns))}
+  # A configuration_error, with the check of step 0 that failed (`reason`), the chain and
+  # network it concerns, and its message, kept with its assigns.
+  defp rejected(%Config{messages: messages}, reason, assigns) do
+    message = Messages.rendered(messages, Map.fetch!(@messages, reason), assigns)
+    {chain, network} = concerns(reason, assigns)
+
+    {:rejected,
+     Rejection.new(:configuration_error, message, nil,
+       reason: reason,
+       chain: chain,
+       network: network
+     )}
+  end
+
+  defp concerns(:nist_sources, _assigns), do: {"nist", nil}
+  defp concerns(_reason, %{chain: chain, network: network}), do: {chain, network}
+  defp concerns(_reason, _assigns), do: {nil, nil}
 
   # ---------------------------------------------------------------------------------------
   # The sources of an online run
@@ -182,17 +211,9 @@ defmodule Truestamp.Verify.Steps.Configuration do
       {:ok, frame} ->
         {:ok, frame}
 
-      {:configuration_error, :no_source, assigns} ->
-        rejected(config, :configuration_no_source, assigns)
-
-      {:configuration_error, :identity_forbidden, assigns} ->
-        rejected(config, :configuration_identity_forbidden, assigns)
-
-      {:configuration_error, :invalid_policy, assigns} ->
-        rejected(config, :configuration_invalid_policy, assigns)
-
-      {:configuration_error, :nist_sources, assigns} ->
-        rejected(config, :configuration_nist_sources, assigns)
+      {:configuration_error, reason, assigns}
+      when reason in [:no_source, :identity_forbidden, :invalid_policy, :nist_sources] ->
+        rejected(config, reason, assigns)
     end
   end
 end

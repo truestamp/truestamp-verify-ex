@@ -95,16 +95,19 @@ defmodule Truestamp.Verify.Check do
     }
   end
 
-  @doc "The check's report row (section 10.5), its message written by `messages`."
+  @doc """
+  The check's report row (section 10.5), its message written by `messages`, its id and
+  assigns kept (`Truestamp.Verify.Row`).
+  """
   @spec row(t(), module()) :: Row.t()
   def row(%__MODULE__{outcome: outcome, message: {id, assigns}} = check, messages) do
-    text = Messages.render(messages, id, assigns)
+    message = Messages.rendered(messages, id, assigns)
     part = Pointer.encode(check.part)
 
     case outcome do
-      :pass -> Row.pass(:derive, part, text, name(check))
-      {:info, code} -> Row.new(:derive, code, part, text, name(check))
-      {:fail, code} -> Row.new(:derive, code, part, text, failure_values(check))
+      :pass -> Row.pass(:derive, part, message, name(check))
+      {:info, code} -> Row.new(:derive, code, part, message, name(check))
+      {:fail, code} -> Row.new(:derive, code, part, message, failure_values(check))
     end
   end
 

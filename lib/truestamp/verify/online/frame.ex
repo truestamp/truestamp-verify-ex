@@ -14,7 +14,9 @@ defmodule Truestamp.Verify.Online.Frame do
   #   makes the run `configuration_error`;
   # - every such source has its identity read, live, and confirmed against its chain's
   #   production value: a source pinned to the production network must give it, and a
-  #   source pinned to any other network must not, or the run is `configuration_error`;
+  #   source pinned to any other network must not, or the run is `configuration_error`; the
+  #   reads run concurrently, and the first network, in order, with a forbidden identity
+  #   decides the error;
   # - a source whose identity read gives no usable answer serves no read: each row it serves
   #   is `skip source_unreachable`;
   # - NIST has no network and no identity read; a reader with no NIST source leaves each
@@ -84,26 +86,54 @@ defmodule Truestamp.Verify.Online.Frame do
   # One identity read for each source of each pinned network, checked against that network.
   # A reader scopes its source ids to a chain and network, so two networks' sources are two
   # reads even when the reader gives them one id.
+  #
+  # The reads run at once, each in a task of its own, and each under the run's deadline, as
+  # `Reads.read/6` holds every read to it; they are then judged in the order of the networks,
+  # so the outcome is the one reads made one after another give. A task carries the calling
+  # process in its `$callers`, which is how a reader's process-local stubs reach the read
+  # (`Truestamp.Verify.Reader`, "Processes").
   defp identities(reader, frame, deadline) do
-    frame
-    |> Enum.sort()
-    |> Enum.reduce_while({:ok, frame}, fn {key, entry}, {:ok, frame} ->
-      case confirm(reader, key, entry, deadline) do
-        {:ok, entry} -> {:cont, {:ok, Map.put(frame, key, entry)}}
+    networks = Enum.sort(frame)
+
+    reads =
+      for {{chain, network}, entry} <- networks, source <- entry.sources do
+        {_production, kind} = Chains.commitment_chain(chain).identity()
+        {source.id, network, kind}
+      end
+
+    answers =
+      reads
+      |> Task.async_stream(
+        fn {id, network, kind} -> identity(reader, id, network, kind, deadline) end,
+        max_concurrency: max(length(reads), 1),
+        ordered: true,
+        timeout: :infinity
+      )
+      |> Enum.map(fn {:ok, answer} -> answer end)
+
+    networks
+    |> Enum.reduce_while({:ok, frame, answers}, fn {key, entry}, {:ok, frame, answers} ->
+      {mine, rest} = Enum.split(answers, length(entry.sources))
+
+      case confirm(key, entry, mine) do
+        {:ok, entry} -> {:cont, {:ok, Map.put(frame, key, entry), rest}}
         error -> {:halt, error}
       end
     end)
+    |> case do
+      {:ok, frame, _no_answer_left} -> {:ok, frame}
+      error -> error
+    end
   end
 
-  # The network's entry with each source's identity confirmed, or configuration_error when
-  # any source gives a value step 0 forbids for that network.
-  defp confirm(reader, {chain, network}, entry, deadline) do
+  # The network's entry with each source's identity confirmed from its answer, or
+  # configuration_error when any source gives a value step 0 forbids for that network.
+  defp confirm({chain, network}, entry, answers) do
     module = Chains.commitment_chain(chain)
-    {production, kind} = module.identity()
+    {production, _kind} = module.identity()
 
     judged =
-      for source <- entry.sources do
-        answer = identity(reader, source.id, network, kind, deadline)
+      for {source, answer} <- Enum.zip(entry.sources, answers) do
         {%{source | identity_meta: meta(answer)}, judge(module, answer, network == production)}
       end
 

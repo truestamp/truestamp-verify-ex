@@ -75,7 +75,7 @@ defmodule Truestamp.Verify.Steps.ExpectedHash do
         :expected_hash,
         :expected_hash_not_checked,
         nil,
-        Run.text(run, :expected_hash_not_checked)
+        Run.message(run, :expected_hash_not_checked)
       )
 
   def row(run, given) when is_binary(given) do
@@ -112,7 +112,7 @@ defmodule Truestamp.Verify.Steps.ExpectedHash do
 
       hash_type in @weak ->
         message =
-          Run.text(run, :expected_hash_weak, %{
+          Run.message(run, :expected_hash_weak, %{
             hash_type: hash_type,
             attributed?: attributed?(run)
           })
@@ -120,14 +120,14 @@ defmodule Truestamp.Verify.Steps.ExpectedHash do
         Row.new(:expected_hash, :expected_hash_weak_algorithm, @part, message, values(expected))
 
       true ->
-        message = Run.text(run, :expected_hash_pass, %{attributed?: attributed?(run)})
+        message = Run.message(run, :expected_hash_pass, %{attributed?: attributed?(run)})
         Row.pass(:expected_hash, @part, message, values(expected))
     end
   end
 
   defp mismatch(run, id, assigns, expected, reason, extra) do
     values = expected |> values() |> Map.put("reason", reason) |> Map.merge(extra)
-    Row.new(:expected_hash, :expected_hash_mismatch, @part, Run.text(run, id, assigns), values)
+    Row.new(:expected_hash, :expected_hash_mismatch, @part, Run.message(run, id, assigns), values)
   end
 
   defp values(expected), do: %{"expected_hash" => expected}

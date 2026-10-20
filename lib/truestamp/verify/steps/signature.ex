@@ -29,12 +29,12 @@ defmodule Truestamp.Verify.Steps.Signature do
 
     case Ed25519.verify(public_key, proof_hash, value) do
       :ok ->
-        row = Row.pass(:signature, nil, Run.text(run, :signature_pass), values)
+        row = Row.pass(:signature, nil, Run.message(run, :signature_pass), values)
         Run.add_row(%{run | attribution: attribution(run.trust_root)}, row)
 
       {:error, refusal} ->
         values = Map.put(values, "refused", Atom.to_string(refusal))
-        message = Run.text(run, :signature_invalid)
+        message = Run.message(run, :signature_invalid)
         Gate.failure(run, Row.new(:signature, :signature_invalid, nil, message, values))
     end
   end

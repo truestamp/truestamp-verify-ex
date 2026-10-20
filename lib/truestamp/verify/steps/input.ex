@@ -58,7 +58,7 @@ defmodule Truestamp.Verify.Steps.Input do
   def read(%Run{} = run, bytes) do
     case JSON.read(bytes) do
       :ok ->
-        row = Row.pass(:read, nil, Run.text(run, :read_pass), %{"octets" => byte_size(bytes)})
+        row = Row.pass(:read, nil, Run.message(run, :read_pass), %{"octets" => byte_size(bytes)})
         {:ok, Run.add_row(run, row)}
 
       {:error, :input_too_large} ->
@@ -72,7 +72,7 @@ defmodule Truestamp.Verify.Steps.Input do
     do:
       Rejection.new(
         :input_too_large,
-        Run.text(run, :input_too_large, %{limit: JSON.max_read_octets()})
+        Run.message(run, :input_too_large, %{limit: JSON.max_read_octets()})
       )
 
   @doc "Step 2, PARSE: J2 to J6 (section 10.1), else `malformed_json` with its `sub_reason`."
@@ -80,11 +80,11 @@ defmodule Truestamp.Verify.Steps.Input do
   def parse(%Run{} = run, bytes) do
     case JSON.parse(bytes) do
       {:ok, document} ->
-        row = Row.pass(:parse, nil, Run.text(run, :parse_pass))
+        row = Row.pass(:parse, nil, Run.message(run, :parse_pass))
         {:ok, Run.add_row(%{run | document: document}, row)}
 
       {:error, {:malformed_json, sub_reason}} ->
-        message = Run.text(run, :malformed_json, %{sub_reason: sub_reason})
+        message = Run.message(run, :malformed_json, %{sub_reason: sub_reason})
         {:rejected, Rejection.new(:malformed_json, message, sub_reason)}
     end
   end
@@ -100,14 +100,14 @@ defmodule Truestamp.Verify.Steps.Input do
          {:ok, public_key} <- public_key(Map.fetch!(signature, "public_key")),
          {:ok, value} <- decode(:value, :b64u64, Map.fetch!(signature, "value")) do
       row =
-        Row.pass(:envelope, nil, Run.text(run, :envelope_pass), %{
+        Row.pass(:envelope, nil, Run.message(run, :envelope_pass), %{
           "key_id" => KeyId.of(public_key)
         })
 
       {:ok, Run.add_row(%{run | proof: proof, public_key: public_key, signature: value}, row)}
     else
       {:error, check} ->
-        message = Run.text(run, :invalid_envelope, %{sub_reason: check})
+        message = Run.message(run, :invalid_envelope, %{sub_reason: check})
         {:rejected, Rejection.new(:invalid_envelope, message, check)}
     end
   end

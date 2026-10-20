@@ -27,9 +27,9 @@ The result is one of:
 | Result | When |
 |---|---|
 | `{:ok, %Truestamp.Verify.Report{}}` | steps 0 to 3 passed: the document is a proof envelope, whatever its label |
-| `{:error, %Truestamp.Verify.Rejection{}}` | a bare rejection: a file too large, malformed JSON, not an envelope, or a configuration that cannot run (section 10.2, the gate) |
+| `{:error, %Truestamp.Verify.Rejection{}}` | a bare rejection: a file too large, malformed JSON, not an envelope, or a configuration that cannot run (section 10.2, the gate); a `configuration_error` names the check that failed in `reason`, with the `chain` and `network` it concerns |
 | `{:error, %Truestamp.Verify.ReadError{}}` | the proof or keyring file could not be read |
-| `{:error, %Truestamp.Verify.Fault{}}` | a fault inside the verifier before steps 0 to 3 passed; only a bug gives one |
+| `{:error, %Truestamp.Verify.Fault{}}` | a fault inside the verifier before steps 0 to 3 passed, at VERDICT, or while the report is written; only a bug gives one, in the library or in a message module you gave |
 
 A proof that fails a check is still `{:ok, report}`, with `label: :failed`. The bang forms,
 `Truestamp.Verify.verify!/2` and `Truestamp.Verify.verify_file!/2`, return the report and
@@ -43,7 +43,7 @@ configuration written wrong is a defect in the caller, not a verification result
 | `label` | `:verified`, `:internally_consistent`, `:supplied_keyring`, `:unattributed` or `:failed` |
 | `code` | for a failed run, the code of the first row that failed |
 | `attribution` | whose key signed the proof, as far as this run can tell |
-| `rows` | every check, a `Truestamp.Verify.Row` with its step, status, code, part and message |
+| `rows` | every check, a `Truestamp.Verify.Row` with its step, status, code, part and message, and the message's id and assigns |
 | `trace` | each value the proof declares beside the value the run recomputed (section 10.6) |
 | `submitted_after`, `submitted_before`, `window` | the submission window an online run draws |
 
@@ -111,6 +111,21 @@ several sources per network, test networks and replay files.
 Every row's message comes from a message module, English by default. Messages are for
 display only: nothing compares them. To translate them, or to word them for your own
 product, give a module with `:messages`; `Truestamp.Verify.Messages` shows how.
+
+Each row and each bare rejection keeps its message's id and the assigns it was rendered
+with, beside the text, so rows you store can be shown again in another locale:
+`Truestamp.Verify.Row.render(row, MyApp.VerifyMessages)` gives the text that module gives
+the row in a run, and `Truestamp.Verify.Rejection.render/2` does the same for a rejection.
+Neither the id nor the assigns is part of the report's JSON.
+
+Every message is rendered in the process that called `verify/2`, `verify_file/2` or
+`apply_expected_hash/2`, so a Gettext locale set in that process applies to every row and
+every rejection.
+
+A message module that raises, or gives a value that is neither UTF-8 text nor nil, is a
+fault like any other: before steps 0 to 3 have passed it gives a `Truestamp.Verify.Fault`,
+and later an `internal_error` row of the step it faulted in, whose text, and that of the
+rows after it, falls back to English. It never makes `verify/2` raise.
 
 ## From the command line
 

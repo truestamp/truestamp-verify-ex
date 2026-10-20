@@ -78,6 +78,12 @@ them. The engine calls `read/5` once per read and source, keeps the answer for t
 the run, and turns a reader that raises, throws or exits into an unreachable read, so a
 reader need not guard against its own failures.
 
+A read can run in a task rather than in the caller's process: step 0's identity reads run at
+once, each in a task, and a run with a deadline makes every read in a task the deadline can
+cut short. Each task carries the caller in its `$callers`, so `Req.Test` stubs and other
+per-process ownership reach it, but the caller's process dictionary does not; keep what a
+read needs in the reader's state (`Truestamp.Verify.Reader`, "Processes").
+
 `Truestamp.Verify.Readers.Replay` is a complete, short reader, and a good model.
 
 ## A keyring source

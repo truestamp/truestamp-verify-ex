@@ -80,16 +80,23 @@ defmodule Truestamp.Verify.Run do
   def failed?(%__MODULE__{rows: rows}), do: Enum.any?(rows, &(&1.status == :fail))
 
   @doc false
-  # The text of message `id` with `assigns`, from the run's message module.
-  def text(%__MODULE__{config: %Config{messages: messages}}, id, assigns \\ %{}),
-    do: Messages.render(messages, id, assigns)
+  # Message `id` with `assigns`, from the run's message module, as a row or a rejection keeps
+  # it: `{id, assigns, text}` (`Truestamp.Verify.Messages.rendered/3`).
+  def message(%__MODULE__{config: %Config{messages: messages}}, id, assigns \\ %{}),
+    do: Messages.rendered(messages, id, assigns)
+
+  @doc false
+  # As `message/3`, with the English default's text when the module faults: for the rows that
+  # record a fault (`Truestamp.Verify.Messages.rendered_or_english/3`).
+  def fault_message(%__MODULE__{config: %Config{messages: messages}}, id, assigns),
+    do: Messages.rendered_or_english(messages, id, assigns)
 
   @doc false
   # Ends the run after a failure at steps 4 to 7, or a fault caught at steps 4 to 13: one
   # row `skip prior_failure`, part null, for each step after the last row's up to
-  # EXPECTED_HASH (sections 10.2 and 10.5).
-  def end_run(%__MODULE__{rows: rows} = run) do
-    message = text(run, :prior_failure_gate)
+  # EXPECTED_HASH (sections 10.2 and 10.5). After a fault, `message` is `fault_message/3`.
+  def end_run(%__MODULE__{rows: rows} = run, message \\ &message/3) do
+    message = message.(run, :prior_failure_gate, %{})
 
     skips =
       for step <- Step.rows_after(List.last(rows).step),

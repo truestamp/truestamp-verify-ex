@@ -49,6 +49,23 @@ defmodule Truestamp.Verify.Reader do
   per read for the whole run, enforces the run's deadline, and turns a reader that raises,
   throws or exits into an unreachable read. A reader need not, and should not, judge an
   answer against the proof.
+
+  ## Processes
+
+  A read may run in a process other than the one that called `Truestamp.Verify.verify/2`:
+
+  - step 0's identity reads run at once, each in a task of its own, in every online run;
+  - in a run with a deadline (the `:deadline` option), every read runs in a task that the
+    deadline can cut short.
+
+  Each such task is started with `Task` by the run's process, or by a task it started, so
+  its `$callers` holds the run's process and the processes that started it. Whatever finds
+  its owner through `$callers` reaches the read: `Req.Test` stubs, Mox expectations and
+  NimbleOwnership allowances among them, so a test's stubs apply. Nothing else of the
+  calling process does: its process dictionary, its Logger metadata and its mailbox stay
+  with it. A reader that needs such state carries it in its `state`, or finds it through
+  `$callers`. The engine judges every answer in the run's process, in the order of section
+  10.2, so reads made at once change no outcome and no row.
   """
 
   alias Truestamp.Verify.Online.Answer

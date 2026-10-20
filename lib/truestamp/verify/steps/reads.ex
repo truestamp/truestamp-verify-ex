@@ -41,10 +41,10 @@ defmodule Truestamp.Verify.Steps.Reads do
         ) ::
           {Row.t(), Run.t()}
   def row(%Run{external_gate: :prior_failure} = run, step, part, _key, _rule, _options),
-    do: {Row.new(step, :prior_failure, part, Run.text(run, :prior_failure_external)), run}
+    do: {Row.new(step, :prior_failure, part, Run.message(run, :prior_failure_external)), run}
 
   def row(%Run{external_gate: :offline} = run, step, part, _key, _rule, options) do
-    message = Run.text(run, :offline, %{read: Keyword.fetch!(options, :offline)})
+    message = Run.message(run, :offline, %{read: Keyword.fetch!(options, :offline)})
     {Row.new(step, :offline, part, message), run}
   end
 
@@ -68,7 +68,7 @@ defmodule Truestamp.Verify.Steps.Reads do
     run = candidate(run, outcome, Keyword.get(options, :side))
 
     message =
-      Run.text(run, :read_outcome, %{status: outcome.status, code: outcome.code, step: step})
+      Run.message(run, :read_outcome, %{status: outcome.status, code: outcome.code, step: step})
 
     values = values(policy, max(length(sources), 1), per_source, outcome, key)
     {Row.new(step, outcome.code, part, message, values), run}

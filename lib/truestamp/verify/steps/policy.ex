@@ -63,13 +63,13 @@ defmodule Truestamp.Verify.Steps.Policy do
     assigns = %{chain: chain, pin: pin, kind: kind}
 
     if network === pin,
-      do: Row.pass(:policy, part, Run.text(run, :policy_pass, assigns), values),
+      do: Row.pass(:policy, part, Run.message(run, :policy_pass, assigns), values),
       else:
         Row.new(
           :policy,
           :network_mismatch,
           part,
-          Run.text(run, :network_mismatch, assigns),
+          Run.message(run, :network_mismatch, assigns),
           Map.put(values, "declared", network)
         )
   end

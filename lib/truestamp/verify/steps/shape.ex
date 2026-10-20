@@ -68,13 +68,13 @@ defmodule Truestamp.Verify.Steps.Shape do
       pass(run, proof, constructions)
     else
       {code, part, {id, assigns}, values} ->
-        fail(run, code, part, Run.text(run, id, assigns), values)
+        fail(run, code, part, Run.message(run, id, assigns), values)
     end
   end
 
   defp pass(run, proof, constructions) do
     type = Map.fetch!(proof, "type")
-    row = Row.pass(:shape, nil, Run.text(run, :shape_pass, %{type: type}), constructions)
+    row = Row.pass(:shape, nil, Run.message(run, :shape_pass, %{type: type}), constructions)
     Run.add_row(%{run | type: type, subject_id: subject_id(type, proof)}, row)
   end
 

@@ -84,7 +84,8 @@ defmodule Truestamp.Verify.Steps.Chain do
   end
 
   defp key_event_commitment(%Run{external_gate: :prior_failure} = run, _rows),
-    do: Row.new(:chain, :prior_failure, @key_event_part, Run.text(run, :prior_failure_external))
+    do:
+      Row.new(:chain, :prior_failure, @key_event_part, Run.message(run, :prior_failure_external))
 
   defp key_event_commitment(%Run{external_gate: :offline} = run, _rows),
     do:
@@ -92,7 +93,7 @@ defmodule Truestamp.Verify.Steps.Chain do
         :chain,
         :offline,
         @key_event_part,
-        Run.text(run, :offline, %{read: :key_event_commitment})
+        Run.message(run, :offline, %{read: :key_event_commitment})
       )
 
   defp key_event_commitment(%Run{external_gate: :open} = run, rows) do
@@ -100,22 +101,26 @@ defmodule Truestamp.Verify.Steps.Chain do
 
     case {Enum.find(inputs, &(&1.status == :fail)), Enum.find(inputs, &(&1.status == :skip))} do
       {%Row{} = failed, _skipped} ->
-        message = Run.text(run, :key_event_commitment_input, %{status: :fail, part: failed.part})
+        message =
+          Run.message(run, :key_event_commitment_input, %{status: :fail, part: failed.part})
+
         Row.new(:chain, failed.code, @key_event_part, message, %{"input" => failed.part})
 
       {nil, %Row{} = skipped} ->
-        message = Run.text(run, :key_event_commitment_input, %{status: :skip, part: skipped.part})
+        message =
+          Run.message(run, :key_event_commitment_input, %{status: :skip, part: skipped.part})
+
         Row.new(:chain, skipped.code, @key_event_part, message, %{"input" => skipped.part})
 
       {nil, nil} when run.attribution == "truestamp" ->
-        Row.pass(:chain, @key_event_part, Run.text(run, :key_event_commitment_pass))
+        Row.pass(:chain, @key_event_part, Run.message(run, :key_event_commitment_pass))
 
       {nil, nil} ->
         Row.new(
           :chain,
           :not_attributable,
           @key_event_part,
-          Run.text(run, :key_event_commitment_not_attributable)
+          Run.message(run, :key_event_commitment_not_attributable)
         )
     end
   end

@@ -36,13 +36,19 @@ defmodule Truestamp.Verify.Chains.Stellar do
   otherwise `skip not_held_by_source`.
 
   Hashes compare as the bytes they spell, and times as instants (section 10.4).
+
+  **A value SHAPE would refuse.** Called directly, on any JSON value, no rule raises:
+  `commitment/2` and `entropy/2` make no read and fail with `shape_invalid` when a member
+  they read is missing or out of its class, an entry with no epoch record or an object with
+  no `closed_at` among them (`Truestamp.Verify.Online.Rule.carried/3`), and `chain_order/3`
+  fails with `ordering_violation` when a `sequence` or a `ledger` is not an INT.
   """
 
   @behaviour Truestamp.Verify.Chains.Member
   @behaviour Truestamp.Verify.CommitmentChain
   @behaviour Truestamp.Verify.EntropySource
 
-  alias Truestamp.Verify.{Check, Edge, Hash}
+  alias Truestamp.Verify.{Check, Edge, Hash, Layout}
   alias Truestamp.Verify.JSON.Pointer
   alias Truestamp.Verify.Online.{Answer, Rule}
   alias Truestamp.Verify.Spec.Constants
@@ -87,11 +93,11 @@ defmodule Truestamp.Verify.Chains.Stellar do
   @impl true
   def chain_order(at, object, entry) do
     part = at ++ ["payload", "sequence"]
-    sequence = object["payload"]["sequence"]
-    ledger = entry["ledger"]
+    sequence = Layout.get(object, ["payload", "sequence"])
+    ledger = Layout.get(entry, ["ledger"])
 
     {outcome, id} =
-      if sequence < ledger,
+      if is_integer(sequence) and is_integer(ledger) and sequence < ledger,
         do: {:pass, :stellar_order_holds},
         else: {{:fail, :ordering_violation}, :stellar_order_violated}
 
@@ -112,11 +118,14 @@ defmodule Truestamp.Verify.Chains.Stellar do
 
   @impl true
   def commitment(context, entry) do
-    ledger = entry["ledger"]
-    memo = Hash.hash_hex(:epoch_hash, entry["epoch"]["record"])
+    members = [{["epoch", "record"], :object}, {["ledger"], :int}, {["transaction_hash"], :hex64}]
 
-    {answer, context} =
-      Rule.read(context, :stellar_transaction, %{"hash" => entry["transaction_hash"]})
+    with {:ok, [record, ledger, hash]} <- Rule.carried(context, entry, members),
+         do: committed(context, Hash.hash_hex(:epoch_hash, record), ledger, hash)
+  end
+
+  defp committed(context, memo, ledger, hash) do
+    {answer, context} = Rule.read(context, :stellar_transaction, %{"hash" => hash})
 
     case answer do
       {:found, fields, _meta} -> transaction(context, fields, memo, ledger)
@@ -234,12 +243,21 @@ defmodule Truestamp.Verify.Chains.Stellar do
 
   @impl Truestamp.Verify.EntropySource
   def entropy(context, object) do
-    %{"sequence" => sequence, "hash" => hash} = object["payload"]
+    members = [
+      {["payload", "closed_at"], :time},
+      {["payload", "hash"], :hex64},
+      {["payload", "sequence"], :int}
+    ]
+
+    with {:ok, [declared_ms, hash, sequence]} <- Rule.carried(context, object, members),
+         do: ledger(context, declared_ms, hash, sequence)
+  end
+
+  defp ledger(context, declared_ms, hash, sequence) do
     {answer, context} = Rule.read(context, :stellar_ledger, %{"sequence" => sequence})
 
     case answer do
       {:found, fields, meta} ->
-        {:ok, declared_ms} = Answer.field(object["payload"], "closed_at", :time)
         read_closed_at = Answer.field(fields, "closed_at", :time)
 
         checks = [

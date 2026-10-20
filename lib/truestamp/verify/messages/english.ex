@@ -24,8 +24,8 @@ defmodule Truestamp.Verify.Messages.English do
           signature_invalid prior_failure_gate shape_pass unsupported_format
           unsupported_version shape_schema shape_witnesses shape_time construction_mismatch_full
           construction_mismatch_reference policy_pass network_mismatch value_recomputed
-          value_not_recomputed bitcoin_well_formed bitcoin_not_well_formed bitcoin_order_holds
-          bitcoin_order_violated stellar_order_holds stellar_order_violated
+          value_not_recomputed bitcoin_well_formed bitcoin_not_well_formed bitcoin_no_epoch_record
+          bitcoin_order_holds bitcoin_order_violated stellar_order_holds stellar_order_violated
           handover_signature_pass handover_signature_fail key_event_key_bytes_pass
           key_event_key_bytes_fail head_order_holds head_order_violated link_key_event_pass
           link_key_event_fail link_key_event_not_attributable prior_failure_external offline
@@ -220,6 +220,11 @@ defmodule Truestamp.Verify.Messages.English do
   def message(:bitcoin_not_well_formed, %{member: member, part: part, rule: rule}),
     do:
       "The #{member} at #{part} is not well formed: it breaks the rule #{String.replace(rule, "_", " ")}."
+
+  def message(:bitcoin_no_epoch_record, %{part: part}) do
+    "The OP_RETURN at #{part} cannot be compared with an epoch hash: the entry carries no " <>
+      "epoch record that is a JSON object, so this run recomputes none."
+  end
 
   def message(:bitcoin_order_holds, _assigns),
     do: "The Bitcoin entropy's height is at most the committed height."

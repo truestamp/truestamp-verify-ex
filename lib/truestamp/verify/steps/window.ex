@@ -51,22 +51,22 @@ defmodule Truestamp.Verify.Steps.Window do
       Run.failed?(run) ->
         Run.add_row(
           run,
-          Row.new(:window, :prior_failure, nil, Run.text(run, :window_prior_failure))
+          Row.new(:window, :prior_failure, nil, Run.message(run, :window_prior_failure))
         )
 
       before_edge && after_edge && Edge.milliseconds(after_edge) > Edge.milliseconds(before_edge) ->
         Run.add_row(
           run,
-          Row.new(:window, :window_inverted, nil, Run.text(run, :window_inverted), values)
+          Row.new(:window, :window_inverted, nil, Run.message(run, :window_inverted), values)
         )
 
       is_nil(before_edge) ->
-        message = Run.text(run, :window_not_established, %{online: run.external_gate == :open})
+        message = Run.message(run, :window_not_established, %{online: run.external_gate == :open})
         Run.add_row(run, Row.new(:window, :window_not_established, nil, message, values))
 
       true ->
         run
-        |> Run.add_row(Row.pass(:window, nil, Run.text(run, :window_pass), values))
+        |> Run.add_row(Row.pass(:window, nil, Run.message(run, :window_pass), values))
         |> recorded_time(before_edge, after_edge)
     end
   end
@@ -134,7 +134,7 @@ defmodule Truestamp.Verify.Steps.Window do
           :window,
           :recorded_time_outside_window,
           part,
-          Run.text(run, :recorded_time_outside_window, %{
+          Run.message(run, :recorded_time_outside_window, %{
             attributed: run.attribution == "truestamp"
           }),
           values

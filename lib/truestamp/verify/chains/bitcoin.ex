@@ -58,13 +58,32 @@ defmodule Truestamp.Verify.Chains.Bitcoin do
   A read that answers not found where the rule gives no outcome for that answer leaves the
   row `skip not_held_by_source`, and an unusable answer `skip source_unreachable`. Hashes
   compare as the bytes they spell.
+
+  ## A value SHAPE would refuse
+
+  A whole run calls these functions only after SHAPE has passed. Called directly, on any
+  JSON value, none raises:
+
+  - `evidence_checks/2`: a `raw_transaction` or `txoutproof` that is missing, or not
+    lowercase hex of whole octets, fails its well-formedness check with
+    `bitcoin_evidence_invalid` and the rule `hex`, and no check that reads a value out of it
+    is made; and an entry whose `raw_transaction` is well formed, but that carries no epoch
+    record that is a JSON object, fails the OP_RETURN check with `bitcoin_evidence_invalid`,
+    its values naming the member `epoch/record`;
+  - `commitment/2`, `genesis/2` and `entropy/2`: a member the rule reads that is missing or
+    out of its class makes no read and fails with `shape_invalid`
+    (`Truestamp.Verify.Online.Rule.carried/3`), and a `txoutproof` that is hex but not a
+    well-formed merkleblock makes no read and fails with `bitcoin_evidence_invalid`, its
+    values naming the member and the rule it breaks;
+  - `chain_order/3`: a height that is not an INT, on either side, fails with
+    `ordering_violation`.
   """
 
   @behaviour Truestamp.Verify.Chains.Member
   @behaviour Truestamp.Verify.CommitmentChain
   @behaviour Truestamp.Verify.EntropySource
 
-  alias Truestamp.Verify.{Bitcoin, Check, Edge, Hash, Instant}
+  alias Truestamp.Verify.{Bitcoin, Check, Edge, Hash, Instant, Layout}
   alias Truestamp.Verify.Bitcoin.{MerkleBlock, Transaction}
   alias Truestamp.Verify.JSON.Pointer
   alias Truestamp.Verify.Online.{Answer, Rule}
@@ -108,20 +127,40 @@ defmodule Truestamp.Verify.Chains.Bitcoin do
 
   @impl true
   def evidence_checks(at, entry) do
-    raw = Base.decode16!(entry["raw_transaction"], case: :lower)
-    txid = Bitcoin.sha256d(raw)
-    epoch_hash = Hash.hash_hex(:epoch_hash, entry["epoch"]["record"])
-    transaction = Transaction.parse(raw)
-    merkle_block = entry["txoutproof"] |> Base.decode16!(case: :lower) |> MerkleBlock.parse()
+    raw = hex_bytes(entry, "raw_transaction")
+    txid = with {:ok, bytes} <- raw, do: {:ok, Bitcoin.sha256d(bytes)}
+    transaction = with {:ok, bytes} <- raw, do: Transaction.parse(bytes)
+
+    merkle_block =
+      with {:ok, bytes} <- hex_bytes(entry, "txoutproof"), do: MerkleBlock.parse(bytes)
 
     Enum.concat([
       [well_formed(at ++ ["raw_transaction"], "raw_transaction", transaction)],
-      op_return(at, transaction, epoch_hash),
-      [transaction_hash(at, entry, txid)],
+      op_return(at, transaction, epoch_hash(entry)),
+      transaction_hash(at, entry, txid),
       [well_formed(at ++ ["txoutproof"], "txoutproof", merkle_block)],
       from_txoutproof(at, entry, merkle_block, txid)
     ])
   end
+
+  # The octets of the HEXBYTES member `name` of `entry`, or the rule `:hex` that a member
+  # missing, or not lowercase hex of one or more octets, breaks.
+  defp hex_bytes(entry, name) do
+    with %{^name => hex} when is_binary(hex) <- entry,
+         true <- Regex.match?(~r/\A(?:[0-9a-f]{2})+\z/, hex) do
+      {:ok, Base.decode16!(hex, case: :lower)}
+    else
+      _other -> {:error, :hex}
+    end
+  end
+
+  # The epoch_hash this run recomputes from the entry's epoch record, or :error when the
+  # entry carries no record to recompute it from.
+  defp epoch_hash(%{"epoch" => %{"record" => record}})
+       when is_map(record) and not is_struct(record),
+       do: {:ok, Hash.hash_hex(:epoch_hash, record)}
+
+  defp epoch_hash(_entry), do: :error
 
   defp well_formed(part, member, {:ok, _structure}) do
     %Check{
@@ -150,7 +189,7 @@ defmodule Truestamp.Verify.Chains.Bitcoin do
     }
   end
 
-  defp op_return(at, {:ok, pushed}, epoch_hash) do
+  defp op_return(at, {:ok, pushed}, {:ok, epoch_hash}) do
     part = at ++ ["raw_transaction"]
 
     [
@@ -166,24 +205,60 @@ defmodule Truestamp.Verify.Chains.Bitcoin do
     ]
   end
 
+  # A well-formed raw_transaction, but no epoch record to recompute the epoch_hash from: the
+  # OP_RETURN check is made, and fails, naming the member it cannot read.
+  defp op_return(at, {:ok, pushed}, :error) do
+    part = at ++ ["raw_transaction"]
+
+    [
+      %Check{
+        part: part,
+        construction: @construction,
+        inputs: Pointer.sort_by([at ++ ["epoch", "record"], part]),
+        declared: Bitcoin.hex(pushed),
+        outcome: {:fail, :bitcoin_evidence_invalid},
+        traced: false,
+        values: %{"member" => "epoch/record"},
+        message: {:bitcoin_no_epoch_record, %{part: Pointer.encode(part)}}
+      }
+    ]
+  end
+
   defp op_return(_at, {:error, _rule}, _epoch_hash), do: []
 
-  defp transaction_hash(at, entry, txid) do
-    Check.equal(
-      at ++ ["transaction_hash"],
-      @construction,
-      [at ++ ["raw_transaction"]],
-      entry["transaction_hash"],
-      Bitcoin.display(txid),
-      noun: :transaction_hash
-    )
+  defp transaction_hash(at, entry, {:ok, txid}) do
+    [
+      Check.equal(
+        at ++ ["transaction_hash"],
+        @construction,
+        [at ++ ["raw_transaction"]],
+        entry["transaction_hash"],
+        Bitcoin.display(txid),
+        noun: :transaction_hash
+      )
+    ]
   end
+
+  defp transaction_hash(_at, _entry, {:error, :hex}), do: []
 
   defp from_txoutproof(at, entry, {:ok, block}, txid) do
     header = block.header
     {:ok, time} = Instant.format(:time, Bitcoin.header_time(header))
 
-    matched =
+    Enum.concat([
+      matched(at, block, txid),
+      [
+        header(at, entry, "header_hash", Bitcoin.header_hash(header)),
+        header(at, entry, "header_merkle_root", Bitcoin.header_merkle_root(header)),
+        header(at, entry, "header_time", time)
+      ]
+    ])
+  end
+
+  defp from_txoutproof(_at, _entry, {:error, _rule}, _txid), do: []
+
+  defp matched(at, block, {:ok, txid}) do
+    [
       Check.equal(
         at ++ ["txoutproof"],
         @construction,
@@ -193,16 +268,10 @@ defmodule Truestamp.Verify.Chains.Bitcoin do
         traced: false,
         noun: :matched_hash
       )
-
-    [
-      matched,
-      header(at, entry, "header_hash", Bitcoin.header_hash(header)),
-      header(at, entry, "header_merkle_root", Bitcoin.header_merkle_root(header)),
-      header(at, entry, "header_time", time)
     ]
   end
 
-  defp from_txoutproof(_at, _entry, {:error, _rule}, _txid), do: []
+  defp matched(_at, _block, {:error, :hex}), do: []
 
   defp header(at, entry, member, recomputed) do
     Check.equal(at ++ [member], @construction, [at ++ ["txoutproof"]], entry[member], recomputed,
@@ -216,11 +285,11 @@ defmodule Truestamp.Verify.Chains.Bitcoin do
   @impl true
   def chain_order(at, object, entry) do
     part = at ++ ["payload", "height"]
-    height = object["payload"]["height"]
-    committed = entry["height"]
+    height = Layout.get(object, ["payload", "height"])
+    committed = Layout.get(entry, ["height"])
 
     {outcome, id} =
-      if height <= committed,
+      if is_integer(height) and is_integer(committed) and height <= committed,
         do: {:pass, :bitcoin_order_holds},
         else: {{:fail, :ordering_violation}, :bitcoin_order_violated}
 
@@ -241,23 +310,38 @@ defmodule Truestamp.Verify.Chains.Bitcoin do
 
   @impl true
   def commitment(context, entry) do
-    height = entry["height"]
-    {:ok, block} = entry["txoutproof"] |> Base.decode16!(case: :lower) |> MerkleBlock.parse()
-    header_hash = Bitcoin.header_hash(block.header)
-
-    with {:final, context} <- final(context, height),
+    with {:ok, [height, txoutproof]} <-
+           Rule.carried(context, entry, [{["height"], :int}, {["txoutproof"], :hexbytes}]),
+         {:ok, block} <- merkle_block(context, txoutproof),
+         header_hash = Bitcoin.header_hash(block.header),
+         {:final, context} <- final(context, height),
          {:ok, context} <- block_at(context, height, header_hash, block.total_txs) do
       if context.top_level?, do: candidate(context, height), else: Rule.pass(context)
     end
   end
 
+  # The entry's txoutproof as a merkleblock; one that is hex but not well formed gives the
+  # outcome `fail bitcoin_evidence_invalid`, with no read made and the rule it breaks.
+  defp merkle_block(context, bytes) do
+    case MerkleBlock.parse(bytes) do
+      {:ok, block} ->
+        {:ok, block}
+
+      {:error, rule} ->
+        Rule.fail(context, :bitcoin_evidence_invalid, %{
+          "member" => "txoutproof",
+          "rule" => Atom.to_string(rule)
+        })
+    end
+  end
+
   @impl true
   def genesis(context, object) do
-    height = object["height"]
-
-    with {:final, context} <- final(context, height) do
+    with {:ok, [header_hash, height]} <-
+           Rule.carried(context, object, [{["header_hash"], :hex64}, {["height"], :int}]),
+         {:final, context} <- final(context, height) do
       {answer, context} = Rule.read(context, :bitcoin_block_at_height, %{"height" => height})
-      genesis_block(context, answer, object["header_hash"])
+      genesis_block(context, answer, header_hash)
     end
   end
 
@@ -344,14 +428,25 @@ defmodule Truestamp.Verify.Chains.Bitcoin do
 
   @impl Truestamp.Verify.EntropySource
   def entropy(context, object) do
-    payload = object["payload"]
-    {answer, context} = Rule.read(context, :bitcoin_block, %{"hash" => payload["hash"]})
+    members = [
+      {["payload", "hash"], :hex64},
+      {["payload", "height"], :int},
+      {["payload", "time"], :int}
+    ]
+
+    with {:ok, [hash, height, time]} <- Rule.carried(context, object, members) do
+      block(context, hash, height, time)
+    end
+  end
+
+  defp block(context, hash, height, time) do
+    {answer, context} = Rule.read(context, :bitcoin_block, %{"hash" => hash})
 
     case answer do
       {:found, fields, meta} ->
         checks = [
-          {"height", Answer.field(fields, "height", :int) |> Rule.compare(payload["height"])},
-          {"time", Answer.field(fields, "time", :int) |> Rule.compare(payload["time"])},
+          {"height", Answer.field(fields, "height", :int) |> Rule.compare(height)},
+          {"time", Answer.field(fields, "time", :int) |> Rule.compare(time)},
           {"median_time_past", Answer.field(fields, "median_time_past", :unix_time) |> present()}
         ]
 

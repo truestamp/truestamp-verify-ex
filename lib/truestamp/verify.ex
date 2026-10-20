@@ -41,7 +41,7 @@ defmodule Truestamp.Verify do
   | `{:ok, %Truestamp.Verify.Report{}}` | steps 0 to 3 passed, so there is a report, whatever its label |
   | `{:error, %Truestamp.Verify.Rejection{}}` | a bare rejection at steps 0 to 3, `configuration_error` included |
   | `{:error, %Truestamp.Verify.ReadError{}}` | a file that cannot be read at all |
-  | `{:error, %Truestamp.Verify.Fault{}}` | a fault before any report |
+  | `{:error, %Truestamp.Verify.Fault{}}` | a fault that leaves no report: before steps 0 to 3 passed, at VERDICT, or while the report is written |
 
   A report labelled `:failed` is still `{:ok, report}`: the run worked, and its rows say
   which check failed. Only `:verified` says that Truestamp signed the proof and that its
@@ -71,8 +71,8 @@ defmodule Truestamp.Verify do
   caller gives, so the engine holds no transport and no branch for any one chain.
   """
 
-  alias Truestamp.Verify.{Config, Engine, Fault, ReadError, Rejection, Report}
-  alias Truestamp.Verify.Steps.{ExpectedHash, Verdict}
+  alias Truestamp.Verify.{Config, Engine, Fault, ReadError, Rejection, Report, Row, Run}
+  alias Truestamp.Verify.Steps.ExpectedHash
 
   @typedoc "What a verification gives."
   @type result :: {:ok, Report.t()} | {:error, Rejection.t() | ReadError.t() | Fault.t()}
@@ -116,25 +116,44 @@ defmodule Truestamp.Verify do
   EXPECTED_HASH row, its label, its run's code and its edges all follow the step order, as
   the specification requires of a verifier that runs this step on a finished report.
   `expected_hash` nil removes the comparison.
+
+  The step runs guarded, as in a run: a fault in it, one in the report's message module
+  among them, is an `internal_error` row of EXPECTED_HASH, as a fresh run gives; and when
+  the report's own EXPECTED_HASH faulted, that row is dropped and the step made again, so
+  the report is the one a fresh run with `expected_hash` gives. Raises
+  `ArgumentError` for a report cut short with `:until`, and `Truestamp.Verify.Fault` for a
+  fault at VERDICT or while the report is written, which no report `verify/2` gave causes.
   """
   @spec apply_expected_hash(Report.t(), String.t() | nil) :: Report.t()
   def apply_expected_hash(%Report{__run__: %{label: label} = run}, expected_hash)
       when label != nil and (is_nil(expected_hash) or is_binary(expected_hash)) do
-    run = %{run | config: %{run.config | expected_hash: expected_hash}}
+    run = before_expected_hash(%{run | config: %{run.config | expected_hash: expected_hash}})
+    run = Engine.step({:expected_hash, &ExpectedHash.expected_hash/1}, run)
 
-    run =
-      if run.ended do
-        run
-      else
-        rows = Enum.reject(run.rows, &(&1.step == :expected_hash))
-        %{run | rows: rows ++ [ExpectedHash.row(run, expected_hash)]}
-      end
-
-    run |> Verdict.verdict() |> Report.from_run()
+    case Engine.conclude(run) do
+      {:ok, report} -> report
+      {:fault, fault} -> raise fault
+    end
   end
 
   def apply_expected_hash(%Report{}, _expected_hash),
     do: raise(ArgumentError, "a report cut short with :until has no EXPECTED_HASH step to apply")
+
+  # The run as it stood before EXPECTED_HASH: with no EXPECTED_HASH row, and, when the run's
+  # own EXPECTED_HASH faulted, not ended, since that fault ended it; a run ended before
+  # EXPECTED_HASH keeps its `skip prior_failure` row there.
+  defp before_expected_hash(%Run{ended: false, rows: rows} = run),
+    do: %{run | rows: Enum.reject(rows, &(&1.step == :expected_hash))}
+
+  defp before_expected_hash(%Run{rows: rows} = run) do
+    case List.last(rows) do
+      %Row{step: :expected_hash, code: :internal_error} ->
+        %{run | rows: Enum.drop(rows, -1), ended: false}
+
+      _skip_prior_failure ->
+        run
+    end
+  end
 
   defp run(input, %Config{} = config), do: config |> Engine.run(input) |> result()
 
@@ -144,7 +163,7 @@ defmodule Truestamp.Verify do
     config |> Engine.run(input, until: until) |> result()
   end
 
-  defp result({:ok, run}), do: {:ok, Report.from_run(run)}
+  defp result({:ok, %Report{} = report}), do: {:ok, report}
   defp result({:rejected, %Rejection{} = rejection}), do: {:error, rejection}
   defp result({:error, %ReadError{} = error}), do: {:error, error}
   defp result({:fault, %Fault{} = fault}), do: {:error, fault}

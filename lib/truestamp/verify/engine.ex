@@ -14,9 +14,15 @@ defmodule Truestamp.Verify.Engine do
   # attribution is `none`. The row's `values` hold only the fault's `kind` and, for an error,
   # the `module` of its exception, so no value the proof carries reaches the report. A fault
   # caught before steps 0 to 3 passed has no report to hold its row (`Truestamp.Verify.Fault`).
-  # VERDICT is not guarded: a fault there gives no report either.
+  # VERDICT and the writing of the report run guarded too (`conclude/2`): a fault there
+  # leaves no report to hold its row either, so it is a `Truestamp.Verify.Fault`.
+  #
+  # A run's message module is the caller's code, so a fault in it is a fault like any other,
+  # with the outcome of where it happens. The rows that record a fault take their text from
+  # `Run.fault_message/3`, the English default's when the module faults on them too, so no
+  # message module can turn a fault into a raise.
 
-  alias Truestamp.Verify.{Config, Fault, JSON, ReadError, Rejection, Row, Run, Step}
+  alias Truestamp.Verify.{Config, Fault, JSON, ReadError, Rejection, Report, Row, Run, Step}
   alias Truestamp.Verify.Steps
 
   @typedoc "The input of a run: a document's bytes, or a file read after CONFIGURATION."
@@ -24,7 +30,7 @@ defmodule Truestamp.Verify.Engine do
 
   @typedoc "What a run gives."
   @type result ::
-          {:ok, Run.t()}
+          {:ok, Report.t()}
           | {:rejected, Rejection.t()}
           | {:error, ReadError.t()}
           | {:fault, Fault.t()}
@@ -50,15 +56,33 @@ defmodule Truestamp.Verify.Engine do
   end
 
   @doc """
-  The steps over `input` under `config`. With `until: step`, the run stops after `step`, one
-  of steps 4 to 13, with no later row and no label: a run cut short, for a test or a tool.
+  The steps over `input` under `config`, and the report. With `until: step`, the run stops
+  after `step`, one of steps 4 to 13, with no later row and no label: a run cut short, for a
+  test or a tool. Raises `ArgumentError` for any other `until`, before step 0.
   """
   @spec run(Config.t(), input(), keyword()) :: result()
   def run(%Config{} = config, input, options \\ []) do
+    until = Keyword.get(options, :until)
+
+    unless is_nil(until) or Keyword.has_key?(steps(), until),
+      do: raise(ArgumentError, "until: #{inspect(until)} is not a step 4 to 13")
+
     case admitted(fn -> admit(config, input) end) do
-      {:ok, run} -> {:ok, after_admission(run, Keyword.get(options, :until))}
+      {:ok, run} -> run |> after_admission(until) |> conclude(until == nil)
       other -> other
     end
+  end
+
+  @doc """
+  VERDICT on `run` when `verdict?`, then its report, guarded: a fault in either, which no
+  conforming input causes, is `{:fault, fault}`, since no report holds its row.
+  """
+  @spec conclude(Run.t(), boolean()) :: {:ok, Report.t()} | {:fault, Fault.t()}
+  def conclude(%Run{} = run, verdict? \\ true) do
+    run = if verdict?, do: Steps.Verdict.verdict(run), else: run
+    {:ok, Report.from_run(run)}
+  catch
+    kind, reason -> {:fault, Fault.new(kind, reason, __STACKTRACE__)}
   end
 
   # Steps 0 to 3.
@@ -85,13 +109,9 @@ defmodule Truestamp.Verify.Engine do
     kind, reason -> {:fault, Fault.new(kind, reason, __STACKTRACE__)}
   end
 
-  defp after_admission(run, nil),
-    do: steps() |> Enum.reduce(run, &step/2) |> Steps.Verdict.verdict()
+  defp after_admission(run, nil), do: Enum.reduce(steps(), run, &step/2)
 
   defp after_admission(run, until) do
-    unless Keyword.has_key?(steps(), until),
-      do: raise(ArgumentError, "until: #{inspect(until)} is not a step 4 to 13")
-
     steps()
     |> Enum.take_while(fn {name, _function} -> name != until end)
     |> Kernel.++([{until, Keyword.fetch!(steps(), until)}])
@@ -113,11 +133,12 @@ defmodule Truestamp.Verify.Engine do
   end
 
   defp fault(run, name, kind, module) do
-    message = Run.text(run, :internal_error, %{step: Step.name(name), kind: kind, module: module})
+    assigns = %{step: Step.name(name), kind: kind, module: module}
+    message = Run.fault_message(run, :internal_error, assigns)
     values = %{"kind" => Atom.to_string(kind), "module" => module}
     row = Row.new(name, :internal_error, nil, message, values)
     run = if name in @gate_steps, do: %{run | attribution: "none"}, else: run
-    run |> Run.add_row(row) |> Run.end_run()
+    run |> Run.add_row(row) |> Run.end_run(&Run.fault_message/3)
   end
 
   # The module of an error's exception, never its message or the terms it holds, which can

@@ -31,12 +31,14 @@ defmodule Truestamp.Verify.Steps.Environment do
         Row.pass(
           :environment,
           "/environment",
-          Run.text(run, :environment_pass, %{environment: e_v}),
+          Run.message(run, :environment_pass, %{environment: e_v}),
           values
         )
       )
     else
-      message = Run.text(run, mismatch(e_v, marker), %{environment: e_v, marker: known(marker)})
+      message =
+        Run.message(run, mismatch(e_v, marker), %{environment: e_v, marker: known(marker)})
+
       values = declared(values, marker)
 
       Gate.failure(

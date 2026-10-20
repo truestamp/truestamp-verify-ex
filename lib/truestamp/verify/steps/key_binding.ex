@@ -24,11 +24,11 @@ defmodule Truestamp.Verify.Steps.KeyBinding do
     do:
       Run.add_row(
         run,
-        Row.new(:key_binding, :key_binding_not_performed, nil, Run.text(run, :keyless))
+        Row.new(:key_binding, :key_binding_not_performed, nil, Run.message(run, :keyless))
       )
 
   def key_binding(%Run{keyring: :unavailable} = run) do
-    message = Run.text(run, :keyring_unavailable, %{kind: run.trust_root.kind})
+    message = Run.message(run, :keyring_unavailable, %{kind: run.trust_root.kind})
     Gate.failure(run, Row.new(:key_binding, :keyring_unavailable, nil, message))
   end
 
@@ -37,11 +37,11 @@ defmodule Truestamp.Verify.Steps.KeyBinding do
 
     case Keyring.find(keyring, public_key) do
       nil ->
-        message = Run.text(run, :key_binding_failed, %{kind: run.trust_root.kind})
+        message = Run.message(run, :key_binding_failed, %{kind: run.trust_root.kind})
         Gate.failure(run, Row.new(:key_binding, :key_binding_failed, nil, message, values))
 
       key ->
-        row = Row.pass(:key_binding, nil, Run.text(run, :key_binding_pass), values)
+        row = Row.pass(:key_binding, nil, Run.message(run, :key_binding_pass), values)
         Run.add_row(%{run | bound_key: key}, row)
     end
   end
